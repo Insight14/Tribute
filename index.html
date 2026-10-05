@@ -1,0 +1,4087 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Kintsugi CR7 — Interactive Glass-Mosaic Generative Art</title>
+  <meta name="description" content="An interactive, cinematic generative-art tribute to Cristiano Ronaldo. Built from stained-glass mosaic shards that crack through grief and heal with glowing kintsugi gold seams." />
+  
+  <!-- Modern Typography from Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Outfit:wght@300;400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  
+  <!-- d3-delaunay from CDN for robust triangulation -->
+  <script src="https://cdn.jsdelivr.net/npm/d3-delaunay@6"></script>
+
+  <style>
+    :root {
+      --bg-color: #05070c;
+      --gold-primary: #f6c85f;
+      --gold-glow: #e8a724;
+      --gold-bright: #fff3c4;
+      --gold-deep: #b3740e;
+      --accent-red: #c8243b;
+      --accent-white: #e9ecef;
+      --accent-green: #008751;
+      --accent-blue: #1b499c;
+      --accent-yellow: #fcd116;
+      --text-muted: #8b9bb4;
+      --panel-bg: rgba(10, 14, 23, 0.85);
+      --panel-border: rgba(246, 200, 95, 0.25);
+      --font-display: 'Cinzel', serif;
+      --font-body: 'Outfit', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--bg-color);
+      color: #f0f4fc;
+      font-family: var(--font-body);
+      touch-action: none;
+    }
+
+    #canvas-container {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Cinematic Overlay / Vignette */
+    .vignette-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 2;
+      background: radial-gradient(circle at 50% 45%, transparent 35%, rgba(4, 6, 11, 0.72) 78%, rgba(2, 3, 6, 0.96) 100%);
+    }
+
+    /* Top HUD / Header */
+    .hud-header {
+      position: absolute;
+      top: 18px;
+      left: 28px;
+      right: 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      z-index: 10;
+      pointer-events: none;
+      transition: opacity 0.4s ease;
+    }
+
+    .brand-group {
+      pointer-events: auto;
+    }
+
+    .brand-title {
+      font-family: var(--font-display);
+      font-size: 24px;
+      font-weight: 900;
+      letter-spacing: 3.5px;
+      background: linear-gradient(135deg, #ffffff 0%, var(--gold-bright) 50%, var(--gold-primary) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-shadow: 0 0 25px rgba(246, 200, 95, 0.35);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-title span.badge {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 1.5px;
+      padding: 3px 8px;
+      border: 1px solid var(--gold-glow);
+      border-radius: 4px;
+      background: rgba(232, 167, 36, 0.12);
+      -webkit-text-fill-color: var(--gold-bright);
+    }
+
+    .brand-subtitle {
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-top: 3px;
+    }
+
+    /* Top-Right Chapter & Meter Widget */
+    .meter-widget {
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      padding: 10px 18px;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5), inset 0 0 15px rgba(246,200,95,0.06);
+      pointer-events: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 210px;
+    }
+
+    .meter-label-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 10px;
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--gold-primary);
+    }
+
+    .meter-bar-track {
+      width: 100%;
+      height: 6px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .meter-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--gold-deep), var(--gold-primary), var(--gold-bright));
+      box-shadow: 0 0 10px var(--gold-glow);
+      transition: width 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    /* Center Moment Caption Overlay */
+    .moment-card-container {
+      position: absolute;
+      bottom: 92px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 90%;
+      max-width: 680px;
+      text-align: center;
+      z-index: 10;
+      pointer-events: none;
+      transition: all 0.5s ease;
+    }
+
+    .moment-card {
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      padding: 14px 26px;
+      border-radius: 14px;
+      box-shadow: 0 15px 40px rgba(0, 0, 0, 0.6), 0 0 25px rgba(246, 200, 95, 0.1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .moment-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--gold-primary), transparent);
+    }
+
+    .moment-act-tag {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--gold-glow);
+      margin-bottom: 3px;
+      display: inline-block;
+    }
+
+    .moment-title {
+      font-family: var(--font-display);
+      font-size: 21px;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+
+    .moment-subtitle {
+      font-size: 13px;
+      line-height: 1.4;
+      color: #cbd5e1;
+      font-weight: 300;
+    }
+
+    .moment-quote {
+      margin-top: 6px;
+      font-style: italic;
+      font-size: 12px;
+      color: var(--gold-bright);
+      font-family: var(--font-display);
+      letter-spacing: 0.5px;
+    }
+
+    /* Bottom Scrubber & Controls */
+    .hud-footer {
+      position: absolute;
+      bottom: 16px;
+      left: 24px;
+      right: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      z-index: 20;
+    }
+
+    .scrubber-container {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      padding: 8px 16px;
+      border-radius: 40px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+      max-width: 95vw;
+      overflow-x: auto;
+      scrollbar-width: none;
+      position: relative;
+    }
+    .scrubber-container::-webkit-scrollbar { display: none; }
+
+    .act-group {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      position: relative;
+      padding: 0 4px;
+    }
+
+    .act-group:not(:last-child)::after {
+      content: '';
+      width: 1px;
+      height: 14px;
+      background: rgba(255, 255, 255, 0.18);
+      margin-left: 6px;
+    }
+
+    .scrub-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.25);
+      cursor: pointer;
+      transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+      position: relative;
+    }
+
+    .scrub-dot:hover {
+      transform: scale(1.4);
+      background: #fff;
+    }
+
+    .scrub-dot.active {
+      transform: scale(1.6);
+      background: var(--gold-bright);
+      box-shadow: 0 0 12px var(--gold-glow);
+    }
+
+    .scrub-dot.visited {
+      background: var(--gold-deep);
+    }
+
+    /* Fixed Tooltip - floats neatly above dot and NEVER overlaps action buttons */
+    .scrub-dot .dot-tooltip {
+      position: absolute;
+      bottom: 26px;
+      left: 50%;
+      transform: translateX(-50%) translateY(4px);
+      background: rgba(8, 12, 20, 0.96);
+      border: 1px solid var(--gold-glow);
+      color: #fff;
+      font-size: 11px;
+      font-family: var(--font-body);
+      white-space: nowrap;
+      padding: 4px 10px;
+      border-radius: 6px;
+      pointer-events: none;
+      opacity: 0;
+      z-index: 100;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.8);
+    }
+    .scrub-dot:hover .dot-tooltip {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* Action Control Buttons */
+    .controls-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      z-index: 25;
+    }
+
+    .btn {
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      color: #f0f4fc;
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-family: var(--font-body);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      backdrop-filter: blur(10px);
+    }
+
+    .btn:hover {
+      background: rgba(246, 200, 95, 0.15);
+      border-color: var(--gold-glow);
+      color: #fff;
+      transform: translateY(-1px);
+    }
+
+    .btn:active {
+      transform: translateY(1px);
+    }
+
+    .btn.active {
+      background: var(--gold-glow);
+      color: #000;
+      border-color: var(--gold-bright);
+    }
+
+    .btn-icon {
+      font-size: 13px;
+    }
+
+    /* Act Title Card Modal */
+    .act-card-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(3, 5, 10, 0.88);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    .act-card-overlay.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .act-card-num {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      letter-spacing: 5px;
+      color: var(--gold-glow);
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    .act-card-title {
+      font-family: var(--font-display);
+      font-size: 40px;
+      font-weight: 900;
+      letter-spacing: 4px;
+      color: #fff;
+      margin-bottom: 10px;
+      text-shadow: 0 0 40px rgba(246,200,95,0.4);
+    }
+
+    .act-card-desc {
+      font-size: 15px;
+      color: #cbd5e1;
+      max-width: 500px;
+      line-height: 1.6;
+      font-weight: 300;
+      margin-bottom: 22px;
+    }
+
+    .act-card-btn {
+      padding: 9px 26px;
+      font-size: 13px;
+      border-radius: 30px;
+      border: 1px solid var(--gold-bright);
+      background: linear-gradient(135deg, var(--gold-glow), var(--gold-deep));
+      color: #000;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 0 25px rgba(246,200,95,0.5);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .act-card-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 35px rgba(246,200,95,0.8);
+    }
+
+    /* Milestone Panel (Chapter 28) */
+    .milestone-panel {
+      position: absolute;
+      top: 48%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.9);
+      background: rgba(10, 14, 25, 0.92);
+      border: 2px solid var(--gold-bright);
+      border-radius: 20px;
+      padding: 32px 42px;
+      box-shadow: 0 0 60px rgba(246,200,95,0.4), inset 0 0 30px rgba(246,200,95,0.1);
+      z-index: 40;
+      text-align: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.7s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    .milestone-panel.visible {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translate(-50%, -50%) scale(1);
+    }
+
+    .milestone-header {
+      font-family: var(--font-display);
+      font-size: 26px;
+      font-weight: 900;
+      color: var(--gold-bright);
+      letter-spacing: 3px;
+      margin-bottom: 20px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px 26px;
+      margin-bottom: 24px;
+    }
+
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .stat-value {
+      font-family: var(--font-display);
+      font-size: 34px;
+      font-weight: 900;
+      color: #fff;
+      text-shadow: 0 0 20px var(--gold-glow);
+    }
+
+    .stat-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--gold-bright);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-top: 3px;
+    }
+
+    /* Interaction Hint Banner */
+    .interaction-hint {
+      position: absolute;
+      top: 75px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 11px;
+      font-family: var(--font-mono);
+      color: rgba(246, 200, 95, 0.75);
+      background: rgba(10, 14, 25, 0.6);
+      border: 1px dashed rgba(246, 200, 95, 0.3);
+      padding: 4px 12px;
+      border-radius: 20px;
+      z-index: 10;
+      pointer-events: none;
+      letter-spacing: 1px;
+      animation: pulseHint 3s infinite ease-in-out;
+    }
+
+    @keyframes pulseHint {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 0.9; }
+    }
+
+    /* Debug Inspector Overlay */
+    .debug-overlay {
+      position: absolute;
+      top: 75px;
+      left: 28px;
+      background: rgba(0, 0, 0, 0.88);
+      border: 1px solid #00ff88;
+      color: #00ff88;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      z-index: 100;
+      pointer-events: none;
+      display: none;
+      line-height: 1.6;
+    }
+
+    .debug-overlay.active {
+      display: block;
+    }
+
+    /* Mobile Adaptations */
+    @media (max-width: 768px) {
+      .hud-header {
+        top: 14px;
+        left: 14px;
+        right: 14px;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .meter-widget {
+        width: 100%;
+        min-width: unset;
+      }
+      .brand-title {
+        font-size: 18px;
+      }
+      .moment-card-container {
+        bottom: 110px;
+        width: 92%;
+      }
+      .moment-title {
+        font-size: 17px;
+      }
+      .moment-subtitle {
+        font-size: 12px;
+      }
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+      }
+      .stat-value {
+        font-size: 26px;
+      }
+      .hud-footer {
+        bottom: 14px;
+        left: 14px;
+        right: 14px;
+      }
+      .controls-row {
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+    }
+  
+    /* Export Notification Toast */
+    .export-toast {
+      position: absolute;
+      top: 72px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-20px);
+      background: rgba(10, 16, 28, 0.95);
+      border: 1px solid var(--gold-primary);
+      box-shadow: 0 8px 32px rgba(246, 200, 95, 0.35);
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: #fff;
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .export-toast.visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    .export-toast .gold-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--gold-primary);
+      box-shadow: 0 0 8px var(--gold-primary);
+    }
+
+    /* Debug Timeline Scrubber */
+    .debug-scrubber-panel {
+      position: absolute;
+      bottom: 84px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(640px, 92vw);
+      background: rgba(8, 12, 20, 0.92);
+      border: 1px solid rgba(0, 255, 136, 0.4);
+      backdrop-filter: blur(12px);
+      border-radius: 8px;
+      padding: 12px 18px;
+      z-index: 50;
+      color: #00ff88;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+    }
+    .debug-scrubber-panel.active {
+      display: flex;
+    }
+    .debug-scrubber-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .debug-track-title {
+      font-weight: 600;
+      letter-spacing: 1px;
+      color: #00ff88;
+    }
+    .debug-scrubber-track-bar {
+      position: relative;
+      height: 14px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 7px;
+      cursor: pointer;
+      overflow: visible;
+    }
+    .debug-scrubber-fill {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      background: #00ff88;
+      border-radius: 7px;
+      width: 0%;
+      pointer-events: none;
+    }
+    .debug-keyframe-marker {
+      position: absolute;
+      top: -3px;
+      width: 6px;
+      height: 20px;
+      background: #ffd700;
+      border-radius: 3px;
+      transform: translateX(-50%);
+      pointer-events: none;
+      box-shadow: 0 0 6px #ffd700;
+    }
+
+  </style>
+</head>
+<body>
+
+  <!-- Canvas Stage -->
+  
+  <!-- Pose Export Notification Toast -->
+  <div id="export-toast" class="export-toast">
+    <div class="gold-dot"></div>
+    <span>Pose JSON copied to clipboard & console (Key E)</span>
+  </div>
+
+  <!-- Debug Track Timeline Scrubber (Key D) -->
+  <div id="debug-scrubber-panel" class="debug-scrubber-panel">
+    <div class="debug-scrubber-header">
+      <span id="dbg-track-name" class="debug-track-title">TRACK: bicycleKick</span>
+      <span id="dbg-track-time">0.00s / 4.95s (t: 0.00)</span>
+    </div>
+    <div id="debug-scrubber-bar" class="debug-scrubber-track-bar">
+      <div id="debug-scrubber-fill" class="debug-scrubber-fill"></div>
+      <div id="debug-keyframe-markers-container"></div>
+    </div>
+    <div style="display: flex; justify-content: space-between; font-size: 11px; opacity: 0.8;">
+      <span>[D] Toggle Debug / Timeline</span>
+      <span>[E] Export Keyframe JSON</span>
+      <span>[SPACE] Play/Pause</span>
+    </div>
+  </div>
+
+  <div id="canvas-container">
+    <canvas id="art-canvas"></canvas>
+  </div>
+  <div class="vignette-overlay"></div>
+
+  <!-- Top HUD -->
+  <header class="hud-header">
+    <div class="brand-group">
+      <div class="brand-title">
+        KINTSUGI CR7
+        <span class="badge">MOSAIC SILHOUETTE</span>
+      </div>
+      <div class="brand-subtitle">Doubt cracks the glass. Comebacks forge the gold.</div>
+    </div>
+
+    <div class="meter-widget">
+      <div class="meter-label-row">
+        <span>Kintsugi Seam Gold</span>
+        <span id="gold-meter-val">0%</span>
+      </div>
+      <div class="meter-bar-track">
+        <div class="meter-bar-fill" id="gold-meter-fill"></div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Interactive Hint -->
+  <div class="interaction-hint">
+    [Cursor / Touch: Scatter Shards] • [Hold Click: Shatter Silhouette] • [Release: Gold Seam Repair]
+  </div>
+
+  <!-- Debug Joint Overlay -->
+  <div class="debug-overlay" id="debug-overlay">
+    DEBUG MODE (Press 'D' to toggle)<br/>
+    Joints: <span id="dbg-joints">17</span> | Shards: <span id="dbg-shards">0</span><br/>
+    Pose: <span id="dbg-pose">standing</span><br/>
+    State: <span id="dbg-state">whole</span> | Gold: <span id="dbg-gold">0.00</span><br/>
+    FPS: <span id="dbg-fps">60</span>
+  </div>
+
+  <!-- Center Moment Card -->
+  <div class="moment-card-container" id="moment-card-container">
+    <div class="moment-card">
+      <div class="moment-act-tag" id="moment-act-tag">ACT I: ORIGINS</div>
+      <h1 class="moment-title" id="moment-title">Boy Behind The Net</h1>
+      <p class="moment-subtitle" id="moment-subtitle">Small silhouette seen through a procedural net lattice; one glowing gold eye point of relentless passion.</p>
+      <div class="moment-quote" id="moment-quote">[QUOTE: fill in]</div>
+    </div>
+  </div>
+
+  <!-- Act Transition Title Card Modal -->
+  <div class="act-card-overlay" id="act-card-overlay">
+    <div class="act-card-num" id="act-modal-num">ACT I</div>
+    <div class="act-card-title" id="act-modal-title">ORIGINS</div>
+    <div class="act-card-desc" id="act-modal-desc">Madeira to Lisbon. The raw humble beginnings where hunger and grief laid the bedrock.</div>
+    <button class="act-card-btn" id="act-modal-btn">ENTER CHAPTER</button>
+  </div>
+
+  <!-- Milestone Final Panel (Chapter 28) -->
+  <div class="milestone-panel" id="milestone-panel">
+    <div class="milestone-header">IMMORTAL KINTSUGI SILHOUETTE</div>
+    <div class="stats-grid">
+      <div class="stat-item">
+        <div class="stat-value" id="stat-goals">0</div>
+        <div class="stat-label">Career Goals</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="stat-ucl">0</div>
+        <div class="stat-label">Champions Leagues</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="stat-bdr">0</div>
+        <div class="stat-label">Ballon d'Ors</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="stat-euro">0</div>
+        <div class="stat-label">Euro Championship</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="stat-boot">0</div>
+        <div class="stat-label">European Golden Boots</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="stat-nations">0</div>
+        <div class="stat-label">Nations League</div>
+      </div>
+    </div>
+    <button class="act-card-btn" id="milestone-replay-btn">REPLAY EXPERIENCE</button>
+  </div>
+
+  <!-- Footer Navigation & Scrubber -->
+  <footer class="hud-footer">
+    <div class="scrubber-container" id="scrubber-container">
+      <!-- Act groups and dots rendered by script -->
+    </div>
+
+    <div class="controls-row">
+      <button class="btn" id="btn-prev" title="Previous Chapter (Left Arrow)">
+        <span class="btn-icon">◀</span> Prev
+      </button>
+      <button class="btn" id="btn-play" title="Play / Pause Autoplay (Space)">
+        <span class="btn-icon" id="play-icon">▶</span> Play
+      </button>
+      <button class="btn" id="btn-next" title="Next Chapter (Right Arrow)">
+        Next <span class="btn-icon">▶</span>
+      </button>
+      <button class="btn" id="btn-shatter" title="Manual Shatter & Repair">
+        <span class="btn-icon">⚡</span> Shatter/Repair
+      </button>
+      <button class="btn" id="btn-sound" title="Toggle Procedural Audio">
+        <span class="btn-icon" id="sound-icon">🔈</span> Sound
+      </button>
+      <button class="btn" id="btn-debug" title="Toggle Skeleton Debug Mode (D)">
+        <span class="btn-icon">🛠</span> Debug
+      </button>
+    </div>
+  </footer>
+
+  <!-- Core Art & Physics Engine -->
+  <script>
+  (function() {
+    'use strict';
+
+    /* =========================================================================
+       1. KITS, COSTUMES & COLOR PALETTES
+       ========================================================================= */
+    const KITS = {
+      sporting: {
+        name: "Sporting CP",
+        jerseyBase: "#006437",
+        jerseyAccent: "#ffffff",
+        pattern: "hoops",
+        shorts: "#151515",
+        socks: "#006437",
+        socksAccent: "#ffffff",
+        bootBase: "#181818",
+        bootAccent: "#ffffff",
+        numberColor: "#ffffff",
+        hairStyle: "curly"
+      },
+      united: {
+        name: "Manchester United",
+        jerseyBase: "#c8102e",
+        jerseyAccent: "#ffffff",
+        pattern: "solid",
+        shorts: "#ffffff",
+        socks: "#121212",
+        socksAccent: "#c8102e",
+        bootBase: "#121212",
+        bootAccent: "#ffd700",
+        numberColor: "#ffffff",
+        hairStyle: "quiff"
+      },
+      madridHome: {
+        name: "Real Madrid (Home)",
+        jerseyBase: "#f6f8fb",
+        jerseyAccent: "#d4af37",
+        pattern: "solid",
+        shorts: "#f6f8fb",
+        socks: "#f6f8fb",
+        socksAccent: "#d4af37",
+        bootBase: "#181818",
+        bootAccent: "#e5c158",
+        numberColor: "#d4af37",
+        hairStyle: "quiff"
+      },
+      madridAway: {
+        name: "Real Madrid (Away)",
+        jerseyBase: "#1b3f8b",
+        jerseyAccent: "#ffffff",
+        pattern: "solid",
+        shorts: "#1b3f8b",
+        socks: "#1b3f8b",
+        socksAccent: "#ffffff",
+        bootBase: "#0d1b2a",
+        bootAccent: "#ffd700",
+        numberColor: "#ffffff",
+        hairStyle: "quiff"
+      },
+      portugal: {
+        name: "Portugal",
+        jerseyBase: "#a6192e",
+        jerseyAccent: "#006643",
+        pattern: "solid",
+        shorts: "#006643",
+        socks: "#a6192e",
+        socksAccent: "#ffd700",
+        bootBase: "#141414",
+        bootAccent: "#ffd700",
+        numberColor: "#ffd700",
+        hairStyle: "quiff"
+      },
+      juve: {
+        name: "Juventus",
+        jerseyBase: "#141414",
+        jerseyAccent: "#ffffff",
+        pattern: "stripes",
+        shorts: "#ffffff",
+        socks: "#ffffff",
+        socksAccent: "#141414",
+        bootBase: "#181818",
+        bootAccent: "#e5c158",
+        numberColor: "#e5c158",
+        hairStyle: "quiff"
+      },
+      alNassr: {
+        name: "Al-Nassr",
+        jerseyBase: "#ffc72c",
+        jerseyAccent: "#0033a0",
+        pattern: "solid",
+        shorts: "#ffc72c",
+        socks: "#ffc72c",
+        socksAccent: "#0033a0",
+        bootBase: "#141414",
+        bootAccent: "#ffc72c",
+        numberColor: "#0033a0",
+        hairStyle: "quiff"
+      },
+      street: {
+        name: "Origins Street",
+        jerseyBase: "#2b343d",
+        jerseyAccent: "#414d59",
+        pattern: "solid",
+        shorts: "#1a2128",
+        socks: "#2b343d",
+        socksAccent: "#1a2128",
+        bootBase: "#221c17",
+        bootAccent: "#4a3c31",
+        numberColor: "transparent",
+        hairStyle: "curly"
+      }
+    };
+
+    // Warm Tan Skin & Hair Palette
+    const MATERIALS = {
+      skin: { base: "#d89e74", shadow: "#a86b45", highlight: "#f3c29e" },
+      hairCurly: { base: "#1e1713", shadow: "#100c0a", highlight: "#3d3027" },
+      hairQuiff: { base: "#181412", shadow: "#0d0a09", highlight: "#342921" }
+    };
+
+    /* =========================================================================
+       2. CONFIGURATION & TUNABLE PARAMETERS
+       ========================================================================= */
+    const CONFIG = {
+      springStiffness: 0.08,
+      damping: 0.88,
+      angularSpring: 0.06,
+      angularDamping: 0.85,
+      
+      mouseRadius: 160,
+      mouseRepulsionForce: 18,
+      holdShatterForce: 35,
+      
+      goldSeamWidth: 2.0,
+      goldGlowBlur: 14,
+      specularShimmerSpeed: 0.003,
+      particleMax: 350,
+      shockwaveSpeed: 9.0,
+      shardGapRatio: 0.94,
+      
+      defaultChapterDuration: 7500,
+      poseTransitionDuration: 1.4,
+      
+      reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    };
+
+    /* =========================================================================
+       3. PROCEDURAL SOUND SYNTHESIS
+       ========================================================================= */
+    class ProceduralAudio {
+      constructor() {
+        this.ctx = null;
+        this.enabled = false;
+      }
+      init() {
+        if (!this.ctx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          if (AudioContext) this.ctx = new AudioContext();
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+      toggle() {
+        this.init();
+        this.enabled = !this.enabled;
+        return this.enabled;
+      }
+      playGlassClink(pitch = 1.0) {
+        if (!this.enabled || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1400 * pitch, now);
+        osc.frequency.exponentialRampToValueAtTime(3200 * pitch, now + 0.05);
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.35);
+      }
+      playShatter(strength = 1.0) {
+        if (!this.enabled || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const bufferSize = this.ctx.sampleRate * 0.4;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buffer;
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'highpass';
+        filter.frequency.setValueAtTime(1800, now);
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.2 * strength, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.ctx.destination);
+        noise.start(now);
+      }
+      playGoldResonance() {
+        if (!this.enabled || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const freqs = [528, 660, 792, 1056];
+        freqs.forEach((f, i) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(f, now);
+          gain.gain.setValueAtTime(0.04 / (i + 1), now);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.8);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(now);
+          osc.stop(now + 1.8);
+        });
+      }
+      playImpact() {
+        if (!this.enabled || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(120, now);
+        osc.frequency.exponentialRampToValueAtTime(30, now + 0.3);
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.35);
+      }
+    }
+    const audio = new ProceduralAudio();
+
+    /* =========================================================================
+       4. SKELETON ARCHITECTURE with CANONICAL ATHLETIC PROPORTIONS
+       7.5 Heads Height, Broad Shoulders (~2 head widths), Tapered Waist, Angled Boots
+       ========================================================================= */
+    const JOINT_NAMES = [
+      'head', 'neck', 'chest', 'pelvis',
+      'l_shoulder', 'l_elbow', 'l_wrist',
+      'r_shoulder', 'r_elbow', 'r_wrist',
+      'l_hip', 'l_knee', 'l_ankle',
+      'r_hip', 'r_knee', 'r_ankle',
+      'eye'
+    ];
+
+    const BONES = [
+      { from: 0, to: 1, rStart: 0.048, rEnd: 0.022, name: 'headNeck' },
+      { from: 1, to: 2, rStart: 0.048, rEnd: 0.082, name: 'upperTorso' },     // Athletic broad torso
+      { from: 2, to: 3, rStart: 0.082, rEnd: 0.052, name: 'lowerTorso' },     // Powerful athletic waist
+      { from: 1, to: 4, rStart: 0.024, rEnd: 0.034, name: 'l_collar' },
+      { from: 4, to: 5, rStart: 0.034, rEnd: 0.026, name: 'l_bicep' },
+      { from: 5, to: 6, rStart: 0.026, rEnd: 0.018, name: 'l_forearm' },
+      { from: 1, to: 7, rStart: 0.024, rEnd: 0.034, name: 'r_collar' },
+      { from: 7, to: 8, rStart: 0.034, rEnd: 0.026, name: 'r_bicep' },
+      { from: 8, to: 9, rStart: 0.026, rEnd: 0.018, name: 'r_forearm' },
+      { from: 3, to: 10, rStart: 0.048, rEnd: 0.048, name: 'l_pelvis' },
+      { from: 10, to: 11, rStart: 0.050, rEnd: 0.038, name: 'l_thigh' },     // Thicker muscular thighs
+      { from: 11, to: 12, rStart: 0.038, rEnd: 0.022, name: 'l_calf' },
+      { from: 3, to: 13, rStart: 0.048, rEnd: 0.048, name: 'r_pelvis' },
+      { from: 13, to: 14, rStart: 0.050, rEnd: 0.038, name: 'r_thigh' },     // Thicker muscular thighs
+      { from: 14, to: 15, rStart: 0.038, rEnd: 0.022, name: 'r_calf' }
+    ];
+
+    const HEAD_RADIUS = 0.048;
+
+    // Neutral Rest Pose
+    const REST_POSE = {
+      head:       { x: 0.50, y: 0.13 },
+      neck:       { x: 0.50, y: 0.20 },
+      chest:      { x: 0.50, y: 0.32 },
+      pelvis:     { x: 0.50, y: 0.49 },
+      l_shoulder: { x: 0.40, y: 0.23 },
+      l_elbow:    { x: 0.33, y: 0.36 },
+      l_wrist:    { x: 0.27, y: 0.48 },
+      r_shoulder: { x: 0.60, y: 0.23 },
+      r_elbow:    { x: 0.67, y: 0.36 },
+      r_wrist:    { x: 0.73, y: 0.48 },
+      l_hip:      { x: 0.45, y: 0.51 },
+      l_knee:     { x: 0.44, y: 0.70 },
+      l_ankle:    { x: 0.43, y: 0.89 },
+      r_hip:      { x: 0.55, y: 0.51 },
+      r_knee:     { x: 0.56, y: 0.70 },
+      r_ankle:    { x: 0.57, y: 0.89 },
+      eye:        { x: 0.51, y: 0.12 }
+    };
+
+    // Library of Canonical Ronaldo Poses in Normalized (0-1) Space
+
+    // GENERATED POSES DATABASE (Extracted from reference video clips)
+    let GENERATED_POSES = {
+  "bicycleKick": {
+    "duration": 4.95,
+    "root": [
+      [
+        0.3322,
+        0.5764
+      ],
+      [
+        0.3684,
+        0.609
+      ],
+      [
+        0.4707,
+        0.5979
+      ],
+      [
+        0.4027,
+        0.6319
+      ],
+      [
+        0.3847,
+        0.6422
+      ],
+      [
+        0.2942,
+        0.6816
+      ],
+      [
+        0.6591,
+        0.6806
+      ],
+      [
+        0.6256,
+        0.6116
+      ],
+      [
+        0.2558,
+        0.6195
+      ],
+      [
+        0.2465,
+        0.5758
+      ]
+    ],
+    "keyframes": [
+      {
+        "t": 0.0,
+        "joints": {
+          "head": {
+            "x": 0.5212,
+            "y": 0.1322
+          },
+          "neck": {
+            "x": 0.5027,
+            "y": 0.2203
+          },
+          "chest": {
+            "x": 0.5014,
+            "y": 0.3502
+          },
+          "pelvis": {
+            "x": 0.5,
+            "y": 0.48
+          },
+          "l_shoulder": {
+            "x": 0.5549,
+            "y": 0.2177
+          },
+          "l_elbow": {
+            "x": 0.5836,
+            "y": 0.3078
+          },
+          "l_wrist": {
+            "x": 0.5907,
+            "y": 0.3957
+          },
+          "r_shoulder": {
+            "x": 0.4506,
+            "y": 0.223
+          },
+          "r_elbow": {
+            "x": 0.3843,
+            "y": 0.355
+          },
+          "r_wrist": {
+            "x": 0.3976,
+            "y": 0.4626
+          },
+          "l_hip": {
+            "x": 0.5349,
+            "y": 0.4796
+          },
+          "l_knee": {
+            "x": 0.5585,
+            "y": 0.6291
+          },
+          "l_ankle": {
+            "x": 0.5356,
+            "y": 0.7375
+          },
+          "r_hip": {
+            "x": 0.4651,
+            "y": 0.4804
+          },
+          "r_knee": {
+            "x": 0.4497,
+            "y": 0.652
+          },
+          "r_ankle": {
+            "x": 0.4377,
+            "y": 0.814
+          },
+          "eye": {
+            "x": 0.5196,
+            "y": 0.1139
+          }
+        }
+      },
+      {
+        "t": 0.083,
+        "joints": {
+          "head": {
+            "x": 0.4862,
+            "y": 0.0864
+          },
+          "neck": {
+            "x": 0.4722,
+            "y": 0.2215
+          },
+          "chest": {
+            "x": 0.4861,
+            "y": 0.3508
+          },
+          "pelvis": {
+            "x": 0.5,
+            "y": 0.48
+          },
+          "l_shoulder": {
+            "x": 0.5259,
+            "y": 0.1896
+          },
+          "l_elbow": {
+            "x": 0.5603,
+            "y": 0.3152
+          },
+          "l_wrist": {
+            "x": 0.5586,
+            "y": 0.3496
+          },
+          "r_shoulder": {
+            "x": 0.4184,
+            "y": 0.2534
+          },
+          "r_elbow": {
+            "x": 0.379,
+            "y": 0.4084
+          },
+          "r_wrist": {
+            "x": 0.4164,
+            "y": 0.537
+          },
+          "l_hip": {
+            "x": 0.5321,
+            "y": 0.4705
+          },
+          "l_knee": {
+            "x": 0.6377,
+            "y": 0.6894
+          },
+          "l_ankle": {
+            "x": 0.5566,
+            "y": 0.7868
+          },
+          "r_hip": {
+            "x": 0.4679,
+            "y": 0.4895
+          },
+          "r_knee": {
+            "x": 0.53,
+            "y": 0.6496
+          },
+          "r_ankle": {
+            "x": 0.5317,
+            "y": 0.926
+          },
+          "eye": {
+            "x": 0.4802,
+            "y": 0.0692
+          }
+        }
+      },
+      {
+        "t": 0.188,
+        "joints": {
+          "head": {
+            "x": 0.4802,
+            "y": 0.1078
+          },
+          "neck": {
+            "x": 0.4697,
+            "y": 0.2218
+          },
+          "chest": {
+            "x": 0.4849,
+            "y": 0.3509
+          },
+          "pelvis": {
+            "x": 0.5,
+            "y": 0.48
+          },
+          "l_shoulder": {
+            "x": 0.5143,
+            "y": 0.1932
+          },
+          "l_elbow": {
+            "x": 0.5592,
+            "y": 0.2273
+          },
+          "l_wrist": {
+            "x": 0.5979,
+            "y": 0.2347
+          },
+          "r_shoulder": {
+            "x": 0.4251,
+            "y": 0.2503
+          },
+          "r_elbow": {
+            "x": 0.4092,
+            "y": 0.3972
+          },
+          "r_wrist": {
+            "x": 0.4788,
+            "y": 0.4298
+          },
+          "l_hip": {
+            "x": 0.5301,
+            "y": 0.4723
+          },
+          "l_knee": {
+            "x": 0.5755,
+            "y": 0.6739
+          },
+          "l_ankle": {
+            "x": 0.5264,
+            "y": 0.8127
+          },
+          "r_hip": {
+            "x": 0.4699,
+            "y": 0.4877
+          },
+          "r_knee": {
+            "x": 0.4706,
+            "y": 0.675
+          },
+          "r_ankle": {
+            "x": 0.468,
+            "y": 0.8772
+          },
+          "eye": {
+            "x": 0.4729,
+            "y": 0.093
+          }
+        }
+      },
+      {
+        "t": 0.375,
+        "joints": {
+          "head": {
+            "x": 0.52,
+            "y": 0.1323
+          },
+          "neck": {
+            "x": 0.4965,
+            "y": 0.2201
+          },
+          "chest": {
+            "x": 0.4983,
+            "y": 0.35
+          },
+          "pelvis": {
+            "x": 0.5,
+            "y": 0.48
+          },
+          "l_shoulder": {
+            "x": 0.5295,
+            "y": 0.2088
+          },
+          "l_elbow": {
+            "x": 0.5626,
+            "y": 0.2943
+          },
+          "l_wrist": {
+            "x": 0.5572,
+            "y": 0.3233
+          },
+          "r_shoulder": {
+            "x": 0.4636,
+            "y": 0.2314
+          },
+          "r_elbow": {
+            "x": 0.4561,
+            "y": 0.357
+          },
+          "r_wrist": {
+            "x": 0.5097,
+            "y": 0.4356
+          },
+          "l_hip": {
+            "x": 0.5225,
+            "y": 0.4796
+          },
+          "l_knee": {
+            "x": 0.5556,
+            "y": 0.661
+          },
+          "l_ankle": {
+            "x": 0.5157,
+            "y": 0.8313
+          },
+          "r_hip": {
+            "x": 0.4775,
+            "y": 0.4804
+          },
+          "r_knee": {
+            "x": 0.4935,
+            "y": 0.6826
+          },
+          "r_ankle": {
+            "x": 0.4119,
+            "y": 0.8028
+          },
+          "eye": {
+            "x": 0.5153,
+            "y": 0.1172
+          }
+        }
+      },
+      {
+        "t": 0.396,
+        "joints": {
+          "head": {
+            "x": 0.5322,
+            "y": 0.1324
+          },
+          "neck": {
+            "x": 0.5007,
+            "y": 0.22
+          },
+          "chest": {
+            "x": 0.5004,
+            "y": 0.35
+          },
+          "pelvis": {
+            "x": 0.5,
+            "y": 0.48
+          },
+          "l_shoulder": {
+            "x": 0.5335,
+            "y": 0.2138
+          },
+          "l_elbow": {
+            "x": 0.5493,
+            "y": 0.3129
+          },
+          "l_wrist": {
+            "x": 0.5398,
+            "y": 0.3659
+          },
+          "r_shoulder": {
+            "x": 0.4679,
+            "y": 0.2262
+          },
+          "r_elbow": {
+            "x": 0.4551,
+            "y": 0.3499
+          },
+          "r_wrist": {
+            "x": 0.5087,
+            "y": 0.4252
+          },
+          "l_hip": {
+            "x": 0.5227,
+            "y": 0.4791
+          },
+          "l_knee": {
+            "x": 0.5668,
+            "y": 0.6281
+          },
+          "l_ankle": {
+            "x": 0.4881,
+            "y": 0.8167
+          },
+          "r_hip": {
+            "x": 0.4773,
+            "y": 0.4809
+          },
+          "r_knee": {
+            "x": 0.4931,
+            "y": 0.6784
+          },
+          "r_ankle": {
+            "x": 0.4091,
+            "y": 0.798
+          },
+          "eye": {
+            "x": 0.5269,
+            "y": 0.118
+          }
+        }
+      },
+      {
+        "t": 0.583,
+        "joints": {
+          "head": {
+            "x": 0.5194,
+            "y": 0.1436
+          },
+          "neck": {
+            "x": 0.5041,
+            "y": 0.2203
+          },
+          "chest": {
+            "x": 0.5021,
+            "y": 0.3501
+          },
+          "pelvis": {
+            "x": 0.5,
+            "y": 0.48
+          },
+          "l_shoulder": {
+            "x": 0.526,
+            "y": 0.2152
+          },
+          "l_elbow": {
+            "x": 0.4523,
+            "y": 0.3452
+          },
+          "l_wrist": {
+            "x": 0.5034,
+            "y": 0.3345
+          },
+          "r_shoulder": {
+            "x": 0.4823,
+            "y": 0.2254
+          },
+          "r_elbow": {
+            "x": 0.4508,
+            "y": 0.3755
+          },
+          "r_wrist": {
+            "x": 0.5285,
+            "y": 0.3696
+          },
+          "l_hip": {
+            "x": 0.5178,
+            "y": 0.4801
+          },
+          "l_knee": {
+            "x": 0.4589,
+            "y": 0.6143
+          },
+          "l_ankle": {
+            "x": 0.4953,
+            "y": 0.8253
+          },
+          "r_hip": {
+            "x": 0.4822,
+            "y": 0.4799
+          },
+          "r_knee": {
+            "x": 0.444,
+            "y": 0.6505
+          },
+          "r_ankle": {
+            "x": 0.497,
+            "y": 0.8113
+          },
+          "eye": {
+            "x": 0.516,
+            "y": 0.1222
+          }
+        }
+      },
+      {
+        "t": 0.708,
+        "joints": {
+          "head": {
+            "x": 0.4797,
+            "y": 0.1691
+          },
+          "neck": {
+            "x": 0.5006,
+            "y": 0.2202
+          },
+          "chest": {
+            "x": 0.5003,
+            "y": 0.3501
+          },
+          "pelvis": {
+            "x": 0.5,
+            "y": 0.48
+          },
+          "l_shoulder": {
+            "x": 0.5287,
+            "y": 0.2269
+          },
+          "l_elbow": {
+            "x": 0.5216,
+            "y": 0.3817
+          },
+          "l_wrist": {
+            "x": 0.5273,
+            "y": 0.4949
+          },
+          "r_shoulder": {
+            "x": 0.4724,
+            "y": 0.2134
+          },
+          "r_elbow": {
+            "x": 0.4586,
+            "y": 0.371
+          },
+          "r_wrist": {
+            "x": 0.4003,
+            "y": 0.4358
+          },
+          "l_hip": {
+            "x": 0.5193,
+            "y": 0.4776
+          },
+          "l_knee": {
+            "x": 0.4191,
+            "y": 0.6561
+          },
+          "l_ankle": {
+            "x": 0.4859,
+            "y": 0.8217
+          },
+          "r_hip": {
+            "x": 0.4807,
+            "y": 0.4824
+          },
+          "r_knee": {
+            "x": 0.3811,
+            "y": 0.6516
+          },
+          "r_ankle": {
+            "x": 0.4812,
+            "y": 0.8145
+          },
+          "eye": {
+            "x": 0.465,
+            "y": 0.165
+          }
+        }
+      },
+      {
+        "t": 0.729,
+        "joints": {
+          "head": {
+            "x": 0.5114,
+            "y": 0.1519
+          },
+          "neck": {
+            "x": 0.5123,
+            "y": 0.2202
+          },
+          "chest": {
+            "x": 0.5061,
+            "y": 0.3501
+          },
+          "pelvis": {
+            "x": 0.5,
+            "y": 0.48
+          },
+          "l_shoulder": {
+            "x": 0.5645,
+            "y": 0.2294
+          },
+          "l_elbow": {
+            "x": 0.5759,
+            "y": 0.3737
+          },
+          "l_wrist": {
+            "x": 0.5922,
+            "y": 0.4927
+          },
+          "r_shoulder": {
+            "x": 0.46,
+            "y": 0.2111
+          },
+          "r_elbow": {
+            "x": 0.4183,
+            "y": 0.3145
+          },
+          "r_wrist": {
+            "x": 0.3726,
+            "y": 0.3982
+          },
+          "l_hip": {
+            "x": 0.537,
+            "y": 0.4857
+          },
+          "l_knee": {
+            "x": 0.4293,
+            "y": 0.6644
+          },
+          "l_ankle": {
+            "x": 0.5104,
+            "y": 0.9178
+          },
+          "r_hip": {
+            "x": 0.463,
+            "y": 0.4743
+          },
+          "r_knee": {
+            "x": 0.3569,
+            "y": 0.6796
+          },
+          "r_ankle": {
+            "x": 0.4591,
+            "y": 0.8839
+          },
+          "eye": {
+            "x": 0.4985,
+            "y": 0.1451
+          }
+        }
+      },
+      {
+        "t": 0.854,
+        "joints": {
+          "head": {
+            "x": 0.5466,
+            "y": 0.1401
+          },
+          "neck": {
+            "x": 0.5019,
+            "y": 0.22
+          },
+          "chest": {
+            "x": 0.501,
+            "y": 0.35
+          },
+          "pelvis": {
+            "x": 0.5,
+            "y": 0.48
+          },
+          "l_shoulder": {
+            "x": 0.5669,
+            "y": 0.2432
+          },
+          "l_elbow": {
+            "x": 0.5913,
+            "y": 0.3856
+          },
+          "l_wrist": {
+            "x": 0.595,
+            "y": 0.4997
+          },
+          "r_shoulder": {
+            "x": 0.4369,
+            "y": 0.1968
+          },
+          "r_elbow": {
+            "x": 0.3741,
+            "y": 0.2613
+          },
+          "r_wrist": {
+            "x": 0.3599,
+            "y": 0.3213
+          },
+          "l_hip": {
+            "x": 0.5359,
+            "y": 0.4876
+          },
+          "l_knee": {
+            "x": 0.4728,
+            "y": 0.6711
+          },
+          "l_ankle": {
+            "x": 0.5019,
+            "y": 0.9193
+          },
+          "r_hip": {
+            "x": 0.4641,
+            "y": 0.4724
+          },
+          "r_knee": {
+            "x": 0.3888,
+            "y": 0.6895
+          },
+          "r_ankle": {
+            "x": 0.4395,
+            "y": 0.857
+          },
+          "eye": {
+            "x": 0.5414,
+            "y": 0.1176
+          }
+        }
+      },
+      {
+        "t": 1.0,
+        "joints": {
+          "head": {
+            "x": 0.5294,
+            "y": 0.1267
+          },
+          "neck": {
+            "x": 0.5004,
+            "y": 0.22
+          },
+          "chest": {
+            "x": 0.5002,
+            "y": 0.35
+          },
+          "pelvis": {
+            "x": 0.5,
+            "y": 0.48
+          },
+          "l_shoulder": {
+            "x": 0.5633,
+            "y": 0.2358
+          },
+          "l_elbow": {
+            "x": 0.5848,
+            "y": 0.3741
+          },
+          "l_wrist": {
+            "x": 0.5789,
+            "y": 0.4839
+          },
+          "r_shoulder": {
+            "x": 0.4376,
+            "y": 0.2041
+          },
+          "r_elbow": {
+            "x": 0.3949,
+            "y": 0.2762
+          },
+          "r_wrist": {
+            "x": 0.3881,
+            "y": 0.3417
+          },
+          "l_hip": {
+            "x": 0.5366,
+            "y": 0.483
+          },
+          "l_knee": {
+            "x": 0.494,
+            "y": 0.6595
+          },
+          "l_ankle": {
+            "x": 0.5017,
+            "y": 0.8825
+          },
+          "r_hip": {
+            "x": 0.4634,
+            "y": 0.477
+          },
+          "r_knee": {
+            "x": 0.4379,
+            "y": 0.686
+          },
+          "r_ankle": {
+            "x": 0.5053,
+            "y": 0.858
+          },
+          "eye": {
+            "x": 0.528,
+            "y": 0.1071
+          }
+        }
+      }
+    ]
+  }
+};
+
+    // Asynchronous loader for poses.generated.json
+    async function loadGeneratedPosesDB() {
+      try {
+        const resp = await fetch('poses.generated.json');
+        if (resp.ok) {
+          const data = await resp.json();
+          GENERATED_POSES = Object.assign(GENERATED_POSES || {}, data);
+          console.log('Successfully loaded poses.generated.json:', Object.keys(GENERATED_POSES));
+        }
+      } catch (err) {
+        console.warn('Using embedded GENERATED_POSES fallback (CORS / file protocol):', err);
+      }
+    }
+    loadGeneratedPosesDB();
+
+    // Catmull-Rom Cubic Spline Interpolation for smooth organic athletic animation
+    function catmullRom1D(p0, p1, p2, p3, t) {
+      const t2 = t * t;
+      const t3 = t2 * t;
+      return 0.5 * (
+        (2 * p1) +
+        (-p0 + p2) * t +
+        (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 +
+        (-p0 + 3 * p1 - 3 * p2 + p3) * t3
+      );
+    }
+
+    function interpolateTrackPose(trackData, normalizedTime, holdAtPeak = 0.0) {
+      if (!trackData || !trackData.keyframes || trackData.keyframes.length === 0) return null;
+      const kfs = trackData.keyframes;
+      if (kfs.length === 1) return JSON.parse(JSON.stringify(kfs[0].joints));
+
+      // Apply Hang-Time / holdAtPeak time warping (slows down near mid-air peak ~0.50)
+      let t = Math.max(0, Math.min(1, normalizedTime));
+      if (holdAtPeak > 0) {
+        const peak = 0.50;
+        const diff = (t - peak) / 0.22;
+        const gauss = Math.exp(-diff * diff);
+        const slowWarp = t - Math.sin((t - peak) * Math.PI) * (holdAtPeak * 0.18) * gauss;
+        t = Math.max(0, Math.min(1, slowWarp));
+      }
+
+      // Find surrounding keyframe segments
+      let idx = 0;
+      for (let i = 0; i < kfs.length - 1; i++) {
+        if (t >= kfs[i].t && t <= kfs[i + 1].t) {
+          idx = i;
+          break;
+        }
+      }
+      if (t >= kfs[kfs.length - 1].t) idx = kfs.length - 2;
+
+      const k0 = kfs[Math.max(0, idx - 1)];
+      const k1 = kfs[idx];
+      const k2 = kfs[idx + 1];
+      const k3 = kfs[Math.min(kfs.length - 1, idx + 2)];
+
+      const segDuration = Math.max(0.0001, k2.t - k1.t);
+      const localT = Math.max(0, Math.min(1, (t - k1.t) / segDuration));
+
+      const resultJoints = {};
+      JOINT_NAMES.forEach(j => {
+        const p0 = k0.joints[j] || k1.joints[j];
+        const p1 = k1.joints[j];
+        const p2 = k2.joints[j];
+        const p3 = k3.joints[j] || k2.joints[j];
+
+        resultJoints[j] = {
+          x: catmullRom1D(p0.x, p1.x, p2.x, p3.x, localT),
+          y: catmullRom1D(p0.y, p1.y, p2.y, p3.y, localT)
+        };
+      });
+
+      // Interpolate root motion trajectory if available
+      let rootMotion = { x: 0, y: 0 };
+      if (trackData.root && trackData.root.length === kfs.length) {
+        const r0 = trackData.root[Math.max(0, idx - 1)];
+        const r1 = trackData.root[idx];
+        const r2 = trackData.root[idx + 1];
+        const r3 = trackData.root[Math.min(kfs.length - 1, idx + 2)];
+        const rInit = trackData.root[0];
+
+        const curRootX = catmullRom1D(r0[0], r1[0], r2[0], r3[0], localT);
+        const curRootY = catmullRom1D(r0[1], r1[1], r2[1], r3[1], localT);
+        rootMotion = {
+          x: (curRootX - rInit[0]) * 0.45,
+          y: (curRootY - rInit[1]) * 0.45
+        };
+      }
+
+      return { joints: resultJoints, root: rootMotion };
+    }
+
+    // Strict Bone Length & Ground Clamping Constraints
+    function enforceSkeletalConstraints(joints, restPose = REST_POSE) {
+      const boneHierarchy = [
+        { parent: 'pelvis', child: 'chest' },
+        { parent: 'chest', child: 'neck' },
+        { parent: 'neck', child: 'head' },
+        { parent: 'neck', child: 'l_shoulder' },
+        { parent: 'l_shoulder', child: 'l_elbow' },
+        { parent: 'l_elbow', child: 'l_wrist' },
+        { parent: 'neck', child: 'r_shoulder' },
+        { parent: 'r_shoulder', child: 'r_elbow' },
+        { parent: 'r_elbow', child: 'r_wrist' },
+        { parent: 'pelvis', child: 'l_hip' },
+        { parent: 'l_hip', child: 'l_knee' },
+        { parent: 'l_knee', child: 'l_ankle' },
+        { parent: 'pelvis', child: 'r_hip' },
+        { parent: 'r_hip', child: 'r_knee' },
+        { parent: 'r_knee', child: 'r_ankle' }
+      ];
+
+      boneHierarchy.forEach(bone => {
+        const p = joints[bone.parent];
+        const c = joints[bone.child];
+        const rp = restPose[bone.parent];
+        const rc = restPose[bone.child];
+        if (p && c && rp && rc) {
+          const targetDist = Math.hypot(rc.x - rp.x, rc.y - rp.y);
+          const dx = c.x - p.x;
+          const dy = c.y - p.y;
+          const curDist = Math.hypot(dx, dy) || 0.0001;
+          c.x = p.x + (dx / curDist) * targetDist;
+          c.y = p.y + (dy / curDist) * targetDist;
+        }
+      });
+
+      // Eye follows head orientation
+      if (joints.head && joints.neck && joints.eye) {
+        const hDirX = joints.head.x - joints.neck.x;
+        const hDirY = joints.head.y - joints.neck.y;
+        joints.eye.x = joints.head.x + hDirX * 0.15;
+        joints.eye.y = joints.head.y - 0.01;
+      }
+    }
+
+    const POSES = {
+      standing: {
+        head: { x: 0.50, y: 0.13 }, neck: { x: 0.50, y: 0.20 }, chest: { x: 0.50, y: 0.32 }, pelvis: { x: 0.50, y: 0.50 },
+        l_shoulder: { x: 0.40, y: 0.23 }, l_elbow: { x: 0.35, y: 0.36 }, l_wrist: { x: 0.33, y: 0.50 },
+        r_shoulder: { x: 0.60, y: 0.23 }, r_elbow: { x: 0.65, y: 0.36 }, r_wrist: { x: 0.67, y: 0.50 },
+        l_hip: { x: 0.45, y: 0.52 }, l_knee: { x: 0.43, y: 0.70 }, l_ankle: { x: 0.42, y: 0.89 },
+        r_hip: { x: 0.55, y: 0.52 }, r_knee: { x: 0.57, y: 0.70 }, r_ankle: { x: 0.58, y: 0.89 },
+        eye: { x: 0.51, y: 0.12 }
+      },
+      boyThroughNet: {
+        head: { x: 0.50, y: 0.33 }, neck: { x: 0.50, y: 0.40 }, chest: { x: 0.50, y: 0.50 }, pelvis: { x: 0.50, y: 0.64 },
+        l_shoulder: { x: 0.42, y: 0.44 }, l_elbow: { x: 0.38, y: 0.53 }, l_wrist: { x: 0.42, y: 0.48 },
+        r_shoulder: { x: 0.58, y: 0.44 }, r_elbow: { x: 0.62, y: 0.53 }, r_wrist: { x: 0.58, y: 0.48 },
+        l_hip: { x: 0.44, y: 0.65 }, l_knee: { x: 0.38, y: 0.76 }, l_ankle: { x: 0.42, y: 0.89 },
+        r_hip: { x: 0.56, y: 0.65 }, r_knee: { x: 0.62, y: 0.76 }, r_ankle: { x: 0.58, y: 0.89 },
+        eye: { x: 0.51, y: 0.32 }
+      },
+      sweeping: {
+        head: { x: 0.39, y: 0.31 }, neck: { x: 0.43, y: 0.37 }, chest: { x: 0.48, y: 0.47 }, pelvis: { x: 0.52, y: 0.57 },
+        l_shoulder: { x: 0.42, y: 0.42 }, l_elbow: { x: 0.39, y: 0.53 }, l_wrist: { x: 0.45, y: 0.63 },
+        r_shoulder: { x: 0.52, y: 0.41 }, r_elbow: { x: 0.56, y: 0.52 }, r_wrist: { x: 0.53, y: 0.67 },
+        l_hip: { x: 0.49, y: 0.59 }, l_knee: { x: 0.44, y: 0.72 }, l_ankle: { x: 0.42, y: 0.88 },
+        r_hip: { x: 0.56, y: 0.59 }, r_knee: { x: 0.59, y: 0.73 }, r_ankle: { x: 0.61, y: 0.89 },
+        eye: { x: 0.37, y: 0.31 }
+      },
+      headBowed: {
+        head: { x: 0.50, y: 0.23 }, neck: { x: 0.50, y: 0.29 }, chest: { x: 0.50, y: 0.40 }, pelvis: { x: 0.50, y: 0.54 },
+        l_shoulder: { x: 0.41, y: 0.33 }, l_elbow: { x: 0.38, y: 0.45 }, l_wrist: { x: 0.44, y: 0.56 },
+        r_shoulder: { x: 0.59, y: 0.33 }, r_elbow: { x: 0.62, y: 0.45 }, r_wrist: { x: 0.56, y: 0.56 },
+        l_hip: { x: 0.46, y: 0.56 }, l_knee: { x: 0.45, y: 0.72 }, l_ankle: { x: 0.44, y: 0.89 },
+        r_hip: { x: 0.54, y: 0.56 }, r_knee: { x: 0.55, y: 0.72 }, r_ankle: { x: 0.56, y: 0.89 },
+        eye: { x: 0.50, y: 0.24 }
+      },
+      strikeFollowThrough: {
+        head: { x: 0.52, y: 0.17 }, neck: { x: 0.50, y: 0.24 }, chest: { x: 0.48, y: 0.34 }, pelvis: { x: 0.45, y: 0.49 },
+        l_shoulder: { x: 0.38, y: 0.27 }, l_elbow: { x: 0.30, y: 0.33 }, l_wrist: { x: 0.24, y: 0.41 },
+        r_shoulder: { x: 0.58, y: 0.25 }, r_elbow: { x: 0.66, y: 0.21 }, r_wrist: { x: 0.73, y: 0.17 },
+        l_hip: { x: 0.42, y: 0.52 }, l_knee: { x: 0.40, y: 0.69 }, l_ankle: { x: 0.38, y: 0.89 },
+        r_hip: { x: 0.50, y: 0.50 }, r_knee: { x: 0.65, y: 0.55 }, r_ankle: { x: 0.80, y: 0.62 },
+        eye: { x: 0.54, y: 0.16 }
+      },
+      freeKickStance: {
+        head: { x: 0.50, y: 0.13 }, neck: { x: 0.50, y: 0.21 }, chest: { x: 0.50, y: 0.33 }, pelvis: { x: 0.50, y: 0.49 },
+        l_shoulder: { x: 0.38, y: 0.24 }, l_elbow: { x: 0.32, y: 0.37 }, l_wrist: { x: 0.35, y: 0.51 },
+        r_shoulder: { x: 0.62, y: 0.24 }, r_elbow: { x: 0.68, y: 0.37 }, r_wrist: { x: 0.65, y: 0.51 },
+        l_hip: { x: 0.44, y: 0.51 }, l_knee: { x: 0.34, y: 0.68 }, l_ankle: { x: 0.26, y: 0.88 },
+        r_hip: { x: 0.56, y: 0.51 }, r_knee: { x: 0.66, y: 0.68 }, r_ankle: { x: 0.74, y: 0.88 },
+        eye: { x: 0.50, y: 0.12 }
+      },
+      freeKickStrike: {
+        head: { x: 0.47, y: 0.19 }, neck: { x: 0.47, y: 0.26 }, chest: { x: 0.47, y: 0.37 }, pelvis: { x: 0.46, y: 0.51 },
+        l_shoulder: { x: 0.37, y: 0.29 }, l_elbow: { x: 0.29, y: 0.35 }, l_wrist: { x: 0.23, y: 0.43 },
+        r_shoulder: { x: 0.57, y: 0.28 }, r_elbow: { x: 0.65, y: 0.32 }, r_wrist: { x: 0.71, y: 0.39 },
+        l_hip: { x: 0.43, y: 0.53 }, l_knee: { x: 0.42, y: 0.71 }, l_ankle: { x: 0.40, y: 0.89 },
+        r_hip: { x: 0.51, y: 0.51 }, r_knee: { x: 0.64, y: 0.61 }, r_ankle: { x: 0.76, y: 0.71 },
+        eye: { x: 0.49, y: 0.18 }
+      },
+      armsOutWelcome: {
+        head: { x: 0.50, y: 0.12 }, neck: { x: 0.50, y: 0.20 }, chest: { x: 0.50, y: 0.31 }, pelvis: { x: 0.50, y: 0.48 },
+        l_shoulder: { x: 0.40, y: 0.23 }, l_elbow: { x: 0.25, y: 0.23 }, l_wrist: { x: 0.11, y: 0.21 },
+        r_shoulder: { x: 0.60, y: 0.23 }, r_elbow: { x: 0.75, y: 0.23 }, r_wrist: { x: 0.89, y: 0.21 },
+        l_hip: { x: 0.45, y: 0.50 }, l_knee: { x: 0.43, y: 0.69 }, l_ankle: { x: 0.42, y: 0.89 },
+        r_hip: { x: 0.55, y: 0.50 }, r_knee: { x: 0.57, y: 0.69 }, r_ankle: { x: 0.58, y: 0.89 },
+        eye: { x: 0.50, y: 0.11 }
+      },
+      trophyLift: {
+        head: { x: 0.50, y: 0.19 }, neck: { x: 0.50, y: 0.26 }, chest: { x: 0.50, y: 0.37 }, pelvis: { x: 0.50, y: 0.52 },
+        l_shoulder: { x: 0.40, y: 0.29 }, l_elbow: { x: 0.32, y: 0.17 }, l_wrist: { x: 0.42, y: 0.05 },
+        r_shoulder: { x: 0.60, y: 0.29 }, r_elbow: { x: 0.68, y: 0.17 }, r_wrist: { x: 0.58, y: 0.05 },
+        l_hip: { x: 0.45, y: 0.54 }, l_knee: { x: 0.43, y: 0.71 }, l_ankle: { x: 0.41, y: 0.90 },
+        r_hip: { x: 0.55, y: 0.54 }, r_knee: { x: 0.57, y: 0.71 }, r_ankle: { x: 0.59, y: 0.90 },
+        eye: { x: 0.50, y: 0.18 }
+      },
+      kneeInjury: {
+        head: { x: 0.46, y: 0.37 }, neck: { x: 0.47, y: 0.44 }, chest: { x: 0.48, y: 0.54 }, pelvis: { x: 0.50, y: 0.67 },
+        l_shoulder: { x: 0.40, y: 0.47 }, l_elbow: { x: 0.41, y: 0.59 }, l_wrist: { x: 0.47, y: 0.70 },
+        r_shoulder: { x: 0.56, y: 0.47 }, r_elbow: { x: 0.57, y: 0.60 }, r_wrist: { x: 0.53, y: 0.71 },
+        l_hip: { x: 0.46, y: 0.68 }, l_knee: { x: 0.37, y: 0.77 }, l_ankle: { x: 0.38, y: 0.90 },
+        r_hip: { x: 0.56, y: 0.68 }, r_knee: { x: 0.66, y: 0.81 }, r_ankle: { x: 0.55, y: 0.91 },
+        eye: { x: 0.45, y: 0.36 }
+      },
+      bicycleKick: {
+        head: { x: 0.74, y: 0.45 }, neck: { x: 0.66, y: 0.43 }, chest: { x: 0.54, y: 0.41 }, pelvis: { x: 0.42, y: 0.41 },
+        l_shoulder: { x: 0.60, y: 0.35 }, l_elbow: { x: 0.68, y: 0.27 }, l_wrist: { x: 0.76, y: 0.21 },
+        r_shoulder: { x: 0.58, y: 0.48 }, r_elbow: { x: 0.64, y: 0.56 }, r_wrist: { x: 0.70, y: 0.64 },
+        l_hip: { x: 0.41, y: 0.45 }, l_knee: { x: 0.46, y: 0.57 }, l_ankle: { x: 0.48, y: 0.70 },
+        r_hip: { x: 0.39, y: 0.38 }, r_knee: { x: 0.31, y: 0.22 }, r_ankle: { x: 0.22, y: 0.06 },
+        eye: { x: 0.76, y: 0.43 }
+      },
+      highJump: {
+        head: { x: 0.50, y: 0.05 }, neck: { x: 0.50, y: 0.12 }, chest: { x: 0.50, y: 0.23 }, pelvis: { x: 0.50, y: 0.38 },
+        l_shoulder: { x: 0.39, y: 0.16 }, l_elbow: { x: 0.30, y: 0.19 }, l_wrist: { x: 0.24, y: 0.15 },
+        r_shoulder: { x: 0.61, y: 0.16 }, r_elbow: { x: 0.70, y: 0.19 }, r_wrist: { x: 0.76, y: 0.15 },
+        l_hip: { x: 0.45, y: 0.41 }, l_knee: { x: 0.40, y: 0.54 }, l_ankle: { x: 0.36, y: 0.67 },
+        r_hip: { x: 0.55, y: 0.41 }, r_knee: { x: 0.60, y: 0.55 }, r_ankle: { x: 0.65, y: 0.68 },
+        eye: { x: 0.50, y: 0.04 }
+      },
+      siu: {
+        head: { x: 0.50, y: 0.14 }, neck: { x: 0.50, y: 0.22 }, chest: { x: 0.50, y: 0.34 }, pelvis: { x: 0.50, y: 0.49 },
+        l_shoulder: { x: 0.38, y: 0.26 }, l_elbow: { x: 0.30, y: 0.41 }, l_wrist: { x: 0.23, y: 0.56 },
+        r_shoulder: { x: 0.62, y: 0.26 }, r_elbow: { x: 0.70, y: 0.41 }, r_wrist: { x: 0.77, y: 0.56 },
+        l_hip: { x: 0.44, y: 0.51 }, l_knee: { x: 0.38, y: 0.68 }, l_ankle: { x: 0.34, y: 0.88 },
+        r_hip: { x: 0.56, y: 0.51 }, r_knee: { x: 0.62, y: 0.68 }, r_ankle: { x: 0.66, y: 0.88 },
+        eye: { x: 0.50, y: 0.13 }
+      },
+      celebrationArmsUp: {
+        head: { x: 0.50, y: 0.12 }, neck: { x: 0.50, y: 0.20 }, chest: { x: 0.50, y: 0.31 }, pelvis: { x: 0.50, y: 0.47 },
+        l_shoulder: { x: 0.40, y: 0.23 }, l_elbow: { x: 0.30, y: 0.12 }, l_wrist: { x: 0.23, y: 0.01 },
+        r_shoulder: { x: 0.60, y: 0.23 }, r_elbow: { x: 0.70, y: 0.12 }, r_wrist: { x: 0.77, y: 0.01 },
+        l_hip: { x: 0.45, y: 0.50 }, l_knee: { x: 0.43, y: 0.68 }, l_ankle: { x: 0.41, y: 0.89 },
+        r_hip: { x: 0.55, y: 0.50 }, r_knee: { x: 0.57, y: 0.68 }, r_ankle: { x: 0.59, y: 0.89 },
+        eye: { x: 0.50, y: 0.11 }
+      },
+      tunnelWalk: {
+        head: { x: 0.50, y: 0.26 }, neck: { x: 0.50, y: 0.32 }, chest: { x: 0.50, y: 0.41 }, pelvis: { x: 0.50, y: 0.53 },
+        l_shoulder: { x: 0.42, y: 0.35 }, l_elbow: { x: 0.39, y: 0.46 }, l_wrist: { x: 0.44, y: 0.56 },
+        r_shoulder: { x: 0.58, y: 0.35 }, r_elbow: { x: 0.61, y: 0.46 }, r_wrist: { x: 0.56, y: 0.56 },
+        l_hip: { x: 0.46, y: 0.56 }, l_knee: { x: 0.44, y: 0.70 }, l_ankle: { x: 0.41, y: 0.86 },
+        r_hip: { x: 0.54, y: 0.56 }, r_knee: { x: 0.56, y: 0.71 }, r_ankle: { x: 0.59, y: 0.86 },
+        eye: { x: 0.50, y: 0.25 }
+      }
+    };
+
+    /* =========================================================================
+       5. DATA-DRIVEN CHAPTERS (All Verified Placeholder Quotes)
+       ========================================================================= */
+    const CHAPTERS = [
+      // ACT I: ORIGINS
+      {
+        id: 1, act: 1, actName: "ACT I: ORIGINS", actDesc: "From the humble streets of Madeira to Lisbon. The raw hunger that started it all.",
+        title: "Boy Behind The Net", subtitle: "Small silhouette seen through a procedural net lattice; one glowing gold eye point of relentless passion.",
+        quote: "[QUOTE: fill in]",
+        kit: "street", pose: 'boyThroughNet', palette: { dark: '#141c16', mid: '#2c3a2f', light: '#465a4a', stroke: '#1a261e' },
+        state: 'dim', gold: 0.0, props: ['net'], duration: 7500
+      },
+      {
+        id: 2, act: 1, actName: "ACT I: ORIGINS",
+        title: "Poverty & The Broom", subtitle: "Bent over sweeping halls in Lisbon; desaturated, dim, missing shards symbolizing sacrifice and lack.",
+        quote: "[QUOTE: fill in]",
+        kit: "street", pose: 'sweeping', palette: { dark: '#111416', mid: '#1f2427', light: '#333b40', stroke: '#181d20' },
+        state: 'dim', gold: 0.02, props: ['broom'], missingShards: 0.18, duration: 7500
+      },
+      {
+        id: 3, act: 1, actName: "ACT I: ORIGINS",
+        title: "First Goal at Sporting CP", subtitle: "First burst of green & white hoops; hairline gold crack-fill and explosive shockwave.",
+        quote: "[QUOTE: fill in]",
+        kit: "sporting", pose: 'strikeFollowThrough', palette: { dark: '#0a2312', mid: '#006437', light: '#e8f5e9', stroke: '#004225' },
+        state: 'cracked', gold: 0.12, props: ['shockwave', 'ballTrail'], duration: 7500
+      },
+      {
+        id: 4, act: 1, actName: "ACT I: ORIGINS",
+        title: "Loses His Father", subtitle: "Figure stands head bowed, then shatters slowly in quiet silence. Low gravity grief. Gold drops to 0.",
+        quote: "[QUOTE: fill in]",
+        kit: "sporting", pose: 'headBowed', palette: { dark: '#08080c', mid: '#14141e', light: '#222330', stroke: '#0d0e17' },
+        state: 'shattered', gold: 0.0, props: [], shatterStrength: 0.45, duration: 8500
+      },
+
+      // ACT II: MANCHESTER UNITED
+      {
+        id: 5, act: 2, actName: "ACT II: MANCHESTER UNITED", actDesc: "Old Trafford, Sir Alex Ferguson's forge. The lightning transformation into a global phenomenon.",
+        title: "Puskás Long-Range Rocket", subtitle: "40-yard bullet vs Porto; ball shard streaks across with fracturing trail, figure repairs in red.",
+        quote: "[QUOTE: fill in]",
+        kit: "united", pose: 'strikeFollowThrough', palette: { dark: '#2b0709', mid: '#9b111e', light: '#e5383b', stroke: '#660708' },
+        state: 'assembling', gold: 0.22, props: ['ballTrail', 'shockwave'], duration: 7500
+      },
+      {
+        id: 6, act: 2, actName: "ACT II: MANCHESTER UNITED",
+        title: "European Golden Boot", subtitle: "Boot-shaped shard cluster glows gold; figure whole with warm crimson & gold aura.",
+        quote: "[QUOTE: fill in]",
+        kit: "united", pose: 'standing', palette: { dark: '#33080c', mid: '#a4161a', light: '#f5cb5c', stroke: '#7f1d1d' },
+        state: 'whole', gold: 0.32, props: ['boot'], duration: 7000
+      },
+      {
+        id: 7, act: 2, actName: "ACT II: MANCHESTER UNITED",
+        title: "First Ballon d'Or (2008)", subtitle: "Figure raises a procedural trophy high into the spotlight; gold surges through the torso seams.",
+        quote: "[QUOTE: fill in]",
+        kit: "united", pose: 'trophyLift', palette: { dark: '#3b090d', mid: '#ba181b', light: '#ffd166', stroke: '#8a1114' },
+        state: 'golden', gold: 0.45, props: ['trophy', 'stars'], duration: 8000
+      },
+      {
+        id: 8, act: 2, actName: "ACT II: MANCHESTER UNITED",
+        title: "Facing The Criticism", subtitle: "Figure stands resolute; surrounding shards lean away in envy while gold holds the core together.",
+        quote: "[QUOTE: fill in]",
+        kit: "united", pose: 'standing', palette: { dark: '#1f1315', mid: '#4a282d', light: '#a37077', stroke: '#2e181c' },
+        state: 'cracked', gold: 0.40, props: ['crowdTaunts'], duration: 7500
+      },
+      {
+        id: 9, act: 2, actName: "ACT II: MANCHESTER UNITED",
+        title: "Arsenal Free Kick", subtitle: "Iconic wide-stance free-kick, explosive strike and dipping knuckleball trail.",
+        quote: "[COMMENTARY: fill in]",
+        kit: "united", pose: 'freeKickStance', poseB: 'freeKickStrike', palette: { dark: '#2b0709', mid: '#b7094c', light: '#ff4d6d', stroke: '#8900f2' },
+        state: 'whole', gold: 0.48, props: ['ballTrail', 'shockwave'], duration: 7500
+      },
+
+      // ACT III: REAL MADRID
+      {
+        id: 10, act: 3, actName: "ACT III: REAL MADRID", actDesc: "The Royal White era. 450 goals in 438 games. Unprecedented Champions League dominance and trials by fire.",
+        title: "Introduction at the Bernabéu", subtitle: "Arms-out welcome pose before 80,000 fans; tiny background crowd shards rising in adoration.",
+        quote: "[QUOTE: fill in]",
+        kit: "madridHome", pose: 'armsOutWelcome', palette: { dark: '#181b20', mid: '#495057', light: '#f8f9fa', stroke: '#ced4da' },
+        state: 'whole', gold: 0.52, props: ['stars'], duration: 7500
+      },
+      {
+        id: 11, act: 3, actName: "ACT III: REAL MADRID",
+        title: "Uno, Dos, Tres, ¡Hala Madrid!", subtitle: "Three pulses of pure light on 1-2-3, followed by a resonant gold burst.",
+        quote: "[QUOTE: fill in]",
+        kit: "madridHome", pose: 'armsOutWelcome', palette: { dark: '#1c202a', mid: '#5c677d', light: '#ffffff', stroke: '#e9ecef' },
+        state: 'golden', gold: 0.58, props: ['lightPulses', 'shockwave'], duration: 7500
+      },
+      {
+        id: 12, act: 3, actName: "ACT III: REAL MADRID",
+        title: "Hostile Crowds & Taunts", subtitle: "Text shards fall and crack the silhouette. State 'cracked', gold dips temporarily.",
+        quote: "[COMMENTARY: fill in]",
+        kit: "madridHome", pose: 'headBowed', palette: { dark: '#1e1a1c', mid: '#3d3036', light: '#735d67', stroke: '#2c2227' },
+        state: 'cracked', gold: 0.46, props: ['crowdTaunts'], duration: 7500
+      },
+      {
+        id: 13, act: 3, actName: "ACT III: REAL MADRID",
+        title: "Camp Nou Silencer (Calma)", subtitle: "Palette switches to royal blue; strike follow-through, massive shockwave, gold veins ignite.",
+        quote: "[QUOTE: fill in]",
+        kit: "madridAway", pose: 'strikeFollowThrough', palette: { dark: '#0c1a30', mid: '#1a4480', light: '#64b5f6', stroke: '#0d2b5c' },
+        state: 'golden', gold: 0.64, props: ['shockwave', 'ballTrail'], duration: 7500
+      },
+      {
+        id: 14, act: 3, actName: "ACT III: REAL MADRID",
+        title: "Knee Injury & Agony", subtitle: "Figure collapses to one knee; leg shards separate and dim in pain, then slowly reunite with gold seams.",
+        quote: "[QUOTE: fill in]",
+        kit: "madridHome", pose: 'kneeInjury', palette: { dark: '#161418', mid: '#2c2533', light: '#50445c', stroke: '#211c26' },
+        state: 'cracked', gold: 0.54, props: [], missingShards: 0.12, duration: 8000
+      },
+      {
+        id: 15, act: 3, actName: "ACT III: REAL MADRID",
+        title: "Euro 2016 Glory (Portugal)", subtitle: "Red & green national palette; injured warrior guides from touchline to lift Portugal's first trophy.",
+        quote: "[QUOTE: fill in]",
+        kit: "portugal", pose: 'trophyLift', palette: { dark: '#1f0d12', mid: '#9b111e', light: '#008751', stroke: '#ffdf00' },
+        state: 'golden', gold: 0.74, props: ['trophy', 'shockwave', 'stars'], duration: 8500
+      },
+      {
+        id: 16, act: 3, actName: "ACT III: REAL MADRID",
+        title: "Bicycle Kick in Turin (April 2018)", subtitle: "Shards fly up into horizontal mid-air scissor-kick 2.38m high; the Juventus stadium stands to applaud.",
+        quote: "[COMMENTARY: fill in]",
+        kit: "madridHome", pose: 'bicycleKick', track: 'bicycleKick', speed: 1.0, loop: true, holdAtPeak: 0.45, palette: { dark: '#10141e', mid: '#2c3e50', light: '#ecf0f1', stroke: '#e8a724' },
+        state: 'golden', gold: 0.82, props: ['shockwave', 'ballTrail'], duration: 8500
+      },
+      {
+        id: 17, act: 3, actName: "ACT III: REAL MADRID",
+        title: "Champions League 3-Peat (5th UCL)", subtitle: "Celebration pose; five gold stars ignite sequentially with three pulses for the historic 3-peat.",
+        quote: "[QUOTE: fill in]",
+        kit: "madridHome", pose: 'celebrationArmsUp', palette: { dark: '#1a1f2c', mid: '#2e3d59', light: '#ffffff', stroke: '#ffd700' },
+        state: 'golden', gold: 0.88, props: ['stars', 'lightPulses', 'trophy'], duration: 8500
+      },
+      {
+        id: 18, act: 3, actName: "ACT III: REAL MADRID",
+        title: "Leaving Madrid (2018)", subtitle: "Silhouette walks into a tunnel of light; fading to dim outline walking away, but gold seams burn eternal.",
+        quote: "[QUOTE: fill in]",
+        kit: "madridHome", pose: 'tunnelWalk', palette: { dark: '#0c0e14', mid: '#1b202c', light: '#414d66', stroke: '#b3740e' },
+        state: 'dim', gold: 0.78, props: ['tunnel'], duration: 7500
+      },
+
+      // ACT IV: WORLD STAGE
+      {
+        id: 19, act: 4, actName: "ACT IV: WORLD STAGE", actDesc: "Carrying the hopes of a nation against the giants of world football.",
+        title: "Sochi 2018 Hat-Trick vs Spain", subtitle: "88th minute free kick; ball curls into top corner for legendary World Cup hat-trick.",
+        quote: "[COMMENTARY: fill in]",
+        kit: "portugal", pose: 'freeKickStance', poseB: 'strikeFollowThrough', palette: { dark: '#240a10', mid: '#a81829', light: '#2ec4b6', stroke: '#ffd166' },
+        state: 'golden', gold: 0.84, props: ['ballTrail', 'shockwave'], duration: 8000
+      },
+
+      // ACT V: JUVENTUS
+      {
+        id: 20, act: 5, actName: "ACT V: JUVENTUS", actDesc: "The Old Lady of Turin. Black and white stripes, conquering a third major European league.",
+        title: "Bianconeri Arrival", subtitle: "Black and white palette; figure assembles in alternating high-contrast monochrome stripes.",
+        quote: "[QUOTE: fill in]",
+        kit: "juve", pose: 'standing', palette: { dark: '#050505', mid: '#2b2b2b', light: '#ffffff', stroke: '#737373' },
+        state: 'assembling', gold: 0.82, props: [], duration: 7000
+      },
+      {
+        id: 21, act: 5, actName: "ACT V: JUVENTUS",
+        title: "Towering Header & First Juve Siu", subtitle: "Rises 2.56m into the air above the frame, then crashes down into the thunderous Siu!",
+        quote: "[COMMENTARY: fill in]",
+        kit: "juve", pose: 'highJump', poseB: 'siu', palette: { dark: '#0a0a0a', mid: '#363636', light: '#f4f4f4', stroke: '#e8a724' },
+        state: 'golden', gold: 0.86, props: ['shockwave'], duration: 8000
+      },
+      {
+        id: 22, act: 5, actName: "ACT V: JUVENTUS",
+        title: "The 2-0 Deficit", subtitle: "Dim, cracked, generic taunts; an abstract opponent gesture shard cluster looms in background.",
+        quote: "[QUOTE: fill in]",
+        kit: "juve", pose: 'headBowed', palette: { dark: '#121217', mid: '#20202a', light: '#4a4a5a', stroke: '#2e2e3d' },
+        state: 'cracked', gold: 0.76, props: ['crowdTaunts'], duration: 7500
+      },
+      {
+        id: 23, act: 5, actName: "ACT V: JUVENTUS",
+        title: "Hat-Trick Comeback vs Atletico", subtitle: "Three ball-shards ignite; gold surges into the chest as impossible comeback is sealed.",
+        quote: "[COMMENTARY: fill in]",
+        kit: "juve", pose: 'siu', palette: { dark: '#111116', mid: '#3d3d4e', light: '#ffd166', stroke: '#ffd700' },
+        state: 'golden', gold: 0.90, props: ['shockwave', 'stars'], duration: 8000
+      },
+      {
+        id: 24, act: 5, actName: "ACT V: JUVENTUS",
+        title: "Scudetto & Domestic Treble", subtitle: "Trophy prop lifts; glowing gold seams link the entire anatomy from heels to crown.",
+        quote: "[QUOTE: fill in]",
+        kit: "juve", pose: 'trophyLift', palette: { dark: '#0d1117', mid: '#263040', light: '#f0f6fc', stroke: '#e8a724' },
+        state: 'whole', gold: 0.91, props: ['trophy'], duration: 7500
+      },
+
+      // ACT VI: RESILIENCE
+      {
+        id: 25, act: 6, actName: "ACT VI: RESILIENCE", actDesc: "The deepest heartbreak, undeniable longevity, and the final radiant state of immortality.",
+        title: "2022 World Cup Exit", subtitle: "Figure walks down tunnel head bowed, weeping; figure shatters partway in raw vulnerability.",
+        quote: "[QUOTE: fill in]",
+        kit: "portugal", pose: 'tunnelWalk', palette: { dark: '#090a10', mid: '#181a24', light: '#2e3245', stroke: '#1a1d2e' },
+        state: 'shattered', gold: 0.72, props: ['tunnel'], shatterStrength: 0.5, duration: 8500
+      },
+      {
+        id: 26, act: 6, actName: "ACT VI: RESILIENCE",
+        title: "Dealing With Loss & Grief", subtitle: "Standing in stillness; slow dim shatter, tender and quiet. No trophies, no particles, pure reverence.",
+        quote: "[QUOTE: fill in]",
+        kit: "portugal", pose: 'headBowed', palette: { dark: '#06070a', mid: '#10131a', light: '#1d222e', stroke: '#121622' },
+        state: 'shattered', gold: 0.65, props: [], shatterStrength: 0.35, duration: 8500
+      },
+      {
+        id: 27, act: 6, actName: "ACT VI: RESILIENCE",
+        title: "Nations League & Eternal Hunger", subtitle: "Trophy lift; gold floods back into every crack, brighter and more resilient than ever.",
+        quote: "[QUOTE: fill in]",
+        kit: "portugal", pose: 'trophyLift', palette: { dark: '#1c0c10', mid: '#8a111b', light: '#008751', stroke: '#ffd700' },
+        state: 'golden', gold: 0.94, props: ['trophy', 'shockwave'], duration: 8000
+      },
+      {
+        id: 28, act: 6, actName: "ACT VI: RESILIENCE",
+        title: "The Immortal Kintsugi Siu (Al-Nassr & Beyond)", subtitle: "Radiant golden figure performing the iconic SIU; career milestones ticking into eternity.",
+        quote: "[QUOTE: fill in]",
+        kit: "alNassr", pose: 'siu', palette: { dark: '#241a04', mid: '#8a6508', light: '#fff176', stroke: '#ffd700' },
+        state: 'golden', gold: 1.0, props: ['shockwave', 'stars', 'milestones'], duration: 10000
+      }
+    ];
+
+    /* =========================================================================
+       6. POISSON-DISC DELAUNAY MESH GENERATOR & MATERIAL REGION TAGGING
+       Body Part Regions: hair, face, neck, skin, jerseyTorso, jerseySleeve, shorts, socks, boots, numberGlyph
+       ========================================================================= */
+    class KintsugiMesh {
+      constructor() {
+        this.vertices = [];
+        this.skinWeights = [];
+        this.triangles = [];
+        this.shards = [];
+        this.edges = [];
+      }
+
+      generate() {
+        const candidatePoints = [];
+
+        // 1. Hair Cluster (Top, back & swept-up quiff above head center)
+        const headPt = REST_POSE.head;
+        const hairQuiffPoints = [
+          { x: headPt.x - 0.025, y: headPt.y - 0.045 },
+          { x: headPt.x,       y: headPt.y - 0.058 },
+          { x: headPt.x + 0.028, y: headPt.y - 0.052 },
+          { x: headPt.x + 0.042, y: headPt.y - 0.038 },
+          { x: headPt.x - 0.042, y: headPt.y - 0.022 },
+          { x: headPt.x + 0.046, y: headPt.y - 0.015 },
+          { x: headPt.x - 0.035, y: headPt.y - 0.038 }
+        ];
+        hairQuiffPoints.forEach(p => {
+          candidatePoints.push({ x: p.x, y: p.y, region: 'hair', densityR: 0.018 });
+        });
+
+        // 2. Face / Head Circle
+        for (let a = 0; a < Math.PI * 2; a += Math.PI / 6) {
+          const r = HEAD_RADIUS * 0.75;
+          const px = headPt.x + Math.cos(a) * r;
+          const py = headPt.y + Math.sin(a) * r;
+          const isHairPart = (py < headPt.y - 0.01) || (Math.abs(px - headPt.x) > 0.035 && py < headPt.y + 0.02);
+          candidatePoints.push({
+            x: px, y: py,
+            region: isHairPart ? 'hair' : 'face',
+            densityR: 0.016
+          });
+        }
+        // Defined Jaw / Chin point
+        candidatePoints.push({ x: headPt.x, y: headPt.y + 0.046, region: 'face', densityR: 0.016 });
+        candidatePoints.push({ x: headPt.x, y: headPt.y, region: 'face', densityR: 0.016 });
+
+        // 3. Number "7" Glyph specific sampling on upper chest/back
+        const num7Points = [
+          { x: 0.485, y: 0.280 }, { x: 0.525, y: 0.280 },
+          { x: 0.520, y: 0.305 }, { x: 0.500, y: 0.335 },
+          { x: 0.488, y: 0.370 }
+        ];
+        num7Points.forEach(p => {
+          candidatePoints.push({ x: p.x, y: p.y, region: 'numberGlyph', densityR: 0.015 });
+        });
+
+        // 4. Sample Bone Volumes with Body-Part Region Tagging
+        BONES.forEach((bone, bIdx) => {
+          const p1 = REST_POSE[JOINT_NAMES[bone.from]];
+          const p2 = REST_POSE[JOINT_NAMES[bone.to]];
+          const dx = p2.x - p1.x;
+          const dy = p2.y - p1.y;
+          const len = Math.hypot(dx, dy);
+          if (len < 0.001) return;
+          const nx = -dy / len;
+          const ny = dx / len;
+
+          const isTorso = bone.name.includes('Torso');
+          const isThigh = bone.name.includes('thigh');
+          const isCalf = bone.name.includes('calf');
+          const isArm = bone.name.includes('bicep') || bone.name.includes('forearm');
+
+          const sampleStep = isTorso ? 0.038 : (isThigh ? 0.032 : 0.024);
+          const steps = Math.max(3, Math.ceil(len / sampleStep));
+
+          for (let s = 0; s <= steps; s++) {
+            const t = s / steps;
+            const cx = p1.x + dx * t;
+            const cy = p1.y + dy * t;
+            const rad = bone.rStart + (bone.rEnd - bone.rStart) * t;
+
+            // Determine body part region
+            let reg = 'skin';
+            if (bone.name === 'headNeck') {
+              reg = 'neck';
+            } else if (isTorso || bone.name.includes('collar')) {
+              reg = 'jerseyTorso';
+            } else if (bone.name.includes('bicep')) {
+              reg = (t < 0.65) ? 'jerseySleeve' : 'skin';
+            } else if (bone.name.includes('forearm')) {
+              reg = 'skin';
+            } else if (bone.name.includes('pelvis')) {
+              reg = 'shorts';
+            } else if (isThigh) {
+              reg = (t < 0.60) ? 'shorts' : 'skin'; // Shorts end at mid-thigh
+            } else if (isCalf) {
+              reg = (t < 0.76) ? 'socks' : 'boots'; // Socks down to lower calf, then boots
+            }
+
+            candidatePoints.push({ x: cx, y: cy, region: reg, densityR: rad * 0.6 });
+
+            const layers = isTorso ? 2 : 1;
+            for (let l = 1; l <= layers; l++) {
+              const r = (rad * l) / layers;
+              candidatePoints.push({ x: cx + nx * r, y: cy + ny * r, region: reg, densityR: rad * 0.5 });
+              candidatePoints.push({ x: cx - nx * r, y: cy - ny * r, region: reg, densityR: rad * 0.5 });
+            }
+          }
+        });
+
+        // 5. Angled Boots Extension Points (toe flare forward)
+        candidatePoints.push({ x: 0.38, y: 0.92, region: 'boots', densityR: 0.016 });
+        candidatePoints.push({ x: 0.46, y: 0.92, region: 'boots', densityR: 0.016 });
+        candidatePoints.push({ x: 0.54, y: 0.92, region: 'boots', densityR: 0.016 });
+        candidatePoints.push({ x: 0.62, y: 0.92, region: 'boots', densityR: 0.016 });
+
+        // 6. Poisson Disc Distance Filtering
+        const filteredPoints = [];
+        for (let i = 0; i < candidatePoints.length; i++) {
+          const p = candidatePoints[i];
+          let tooClose = false;
+          for (let j = 0; j < filteredPoints.length; j++) {
+            const q = filteredPoints[j];
+            const dist = Math.hypot(p.x - q.x, p.y - q.y);
+            const reqDist = Math.min(p.densityR, q.densityR) * 0.85;
+            if (dist < reqDist) {
+              tooClose = true;
+              break;
+            }
+          }
+          if (!tooClose) {
+            filteredPoints.push(p);
+          }
+        }
+
+        // 7. Delaunay Triangulation
+        let flatCoords = [];
+        filteredPoints.forEach(p => flatCoords.push(p.x, p.y));
+
+        let rawTriangles = [];
+        if (window.d3 && window.d3.Delaunay) {
+          const delaunay = new d3.Delaunay(flatCoords);
+          const raw = delaunay.triangles;
+          for (let i = 0; i < raw.length; i += 3) {
+            rawTriangles.push([raw[i], raw[i+1], raw[i+2]]);
+          }
+        } else {
+          for (let i = 0; i < filteredPoints.length - 2; i += 3) {
+            rawTriangles.push([i, i + 1, i + 2]);
+          }
+        }
+
+        this.vertices = filteredPoints.map(p => ({ x: p.x, y: p.y, region: p.region }));
+        this.triangles = [];
+
+        // 8. Quality Filter & Sliver Rejection
+        rawTriangles.forEach(tri => {
+          const p0 = this.vertices[tri[0]];
+          const p1 = this.vertices[tri[1]];
+          const p2 = this.vertices[tri[2]];
+          if (!p0 || !p1 || !p2) return;
+
+          const cx = (p0.x + p1.x + p2.x) / 3;
+          const cy = (p0.y + p1.y + p2.y) / 3;
+
+          let inside = false;
+          // Head / hair check
+          if (Math.hypot(cx - REST_POSE.head.x, cy - REST_POSE.head.y) <= HEAD_RADIUS * 1.35) {
+            inside = true;
+          }
+          // Foot toe check
+          if (cy >= 0.88 && cy <= 0.94 && Math.abs(cx - 0.50) <= 0.16) {
+            inside = true;
+          }
+
+          if (!inside) {
+            for (let b = 0; b < BONES.length; b++) {
+              const bone = BONES[b];
+              const bp1 = REST_POSE[JOINT_NAMES[bone.from]];
+              const bp2 = REST_POSE[JOINT_NAMES[bone.to]];
+              const distData = this.distToTaperedSegment({ x: cx, y: cy }, bp1, bp2, bone.rStart, bone.rEnd);
+              if (distData.inside) {
+                inside = true;
+                break;
+              }
+            }
+          }
+
+          if (inside) {
+            const a = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+            const b = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+            const c = Math.hypot(p0.x - p2.x, p0.y - p2.y);
+            
+            const s = (a + b + c) / 2;
+            const area = Math.sqrt(Math.max(0, s * (s - a) * (s - b) * (s - c)));
+            
+            if (area > 0.00008 && Math.max(a, b, c) < 0.16) {
+              const minEdge = Math.min(a, b, c);
+              const maxEdge = Math.max(a, b, c);
+              if (minEdge / maxEdge > 0.18) {
+                this.triangles.push(tri);
+              }
+            }
+          }
+        });
+
+        // 9. Skinning to Bone Coordinates (u, v)
+        this.skinWeights = this.vertices.map(v => {
+          let bestBone = 0;
+          let bestDist = Infinity;
+          let bestU = 0;
+          let bestV = 0;
+
+          const hHead = REST_POSE.head;
+          const hDist = Math.hypot(v.x - hHead.x, v.y - hHead.y);
+          // Strictly bind hair to head bone
+          if (v.region === 'hair' || hDist <= HEAD_RADIUS * 1.40) {
+            return { boneIdx: 0, u: 0.0, v: (v.x - hHead.x), isHead: true, headOffX: v.x - hHead.x, headOffY: v.y - hHead.y };
+          }
+
+          BONES.forEach((bone, bIdx) => {
+            const p1 = REST_POSE[JOINT_NAMES[bone.from]];
+            const p2 = REST_POSE[JOINT_NAMES[bone.to]];
+            const dx = p2.x - p1.x;
+            const dy = p2.y - p1.y;
+            const lenSq = dx * dx + dy * dy || 0.0001;
+            const u = Math.max(0, Math.min(1, ((v.x - p1.x) * dx + (v.y - p1.y) * dy) / lenSq));
+            const projX = p1.x + u * dx;
+            const projY = p1.y + u * dy;
+            const dist = Math.hypot(v.x - projX, v.y - projY);
+
+            if (dist < bestDist) {
+              bestDist = dist;
+              bestBone = bIdx;
+              bestU = u;
+              const len = Math.sqrt(lenSq);
+              const nx = -dy / len;
+              const ny = dx / len;
+              bestV = (v.x - projX) * nx + (v.y - projY) * ny;
+            }
+          });
+
+          return { boneIdx: bestBone, u: bestU, v: bestV, isHead: false };
+        });
+
+        // 10. Shard Builder with Material Region Inherited from Centroid
+        const lightDir = { x: -0.45, y: -0.65, z: 0.60 };
+        const lightLen = Math.hypot(lightDir.x, lightDir.y, lightDir.z);
+        lightDir.x /= lightLen; lightDir.y /= lightLen; lightDir.z /= lightLen;
+
+        this.shards = this.triangles.map((tri, idx) => {
+          const p0 = this.vertices[tri[0]];
+          const p1 = this.vertices[tri[1]];
+          const p2 = this.vertices[tri[2]];
+          const cx = (p0.x + p1.x + p2.x) / 3;
+          const cy = (p0.y + p1.y + p2.y) / 3;
+
+          // Region voting from vertices & centroid
+          const regCounts = {};
+          [p0.region, p1.region, p2.region].forEach(r => {
+            regCounts[r] = (regCounts[r] || 0) + 1;
+          });
+          let shardRegion = p0.region;
+          let maxCount = 0;
+          for (let r in regCounts) {
+            if (regCounts[r] > maxCount) {
+              maxCount = regCounts[r];
+              shardRegion = r;
+            }
+          }
+
+          // Number "7" glyph detection
+          if (cy >= 0.27 && cy <= 0.38 && Math.abs(cx - 0.505) < 0.032) {
+            if (cy < 0.30 || (cx > 0.50 && cy < 0.34) || (cx > 0.485 && cy >= 0.34)) {
+              shardRegion = 'numberGlyph';
+            }
+          }
+
+          const nx = (Math.random() - 0.5) * 0.4;
+          const ny = (Math.random() - 0.5) * 0.4;
+          const nz = 0.85 + Math.random() * 0.15;
+          const nLen = Math.hypot(nx, ny, nz);
+          const dot = (nx * lightDir.x + ny * lightDir.y + nz * lightDir.z) / nLen;
+          const facetLight = Math.max(0.70, Math.min(1.30, 0.88 + dot * 0.38));
+
+          const restE0 = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+          const restE1 = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+          const restE2 = Math.hypot(p0.x - p2.x, p0.y - p2.y);
+          return {
+            id: idx,
+            indices: tri,
+            region: shardRegion,
+            restEdges: [restE0, restE1, restE2],
+            homeCentroid: { x: 0, y: 0 },
+            currentPos: { x: 0, y: 0 },
+            currentVertices: [{ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }],
+            restCentroidNorm: { x: cx, y: cy },
+            vx: 0, vy: 0,
+            rotation: 0, vRot: 0,
+            broken: 0, gold: 0,
+            missing: false,
+            opacity: 1.0,
+            facetLight: facetLight,
+            specularPhase: Math.random() * Math.PI * 2,
+            tintShift: (Math.random() - 0.5) * 0.08
+          };
+        });
+
+        // 11. Selective Gold Seam Edges (18-22%)
+        const edgeMap = new Map();
+        this.triangles.forEach((tri, tIdx) => {
+          for (let i = 0; i < 3; i++) {
+            const a = tri[i];
+            const b = tri[(i + 1) % 3];
+            const key = a < b ? `${a}_${b}` : `${b}_${a}`;
+            if (!edgeMap.has(key)) {
+              edgeMap.set(key, {
+                v0: a, v1: b, count: 1, triangles: [tIdx],
+                isGoldCandidate: Math.random() < 0.20
+              });
+            } else {
+              const item = edgeMap.get(key);
+              item.count++;
+              item.triangles.push(tIdx);
+            }
+          }
+        });
+        this.edges = Array.from(edgeMap.values());
+      }
+
+      distToTaperedSegment(p, v, w, r1, r2) {
+        const dx = w.x - v.x;
+        const dy = w.y - v.y;
+        const l2 = dx * dx + dy * dy;
+        if (l2 === 0) {
+          const d = Math.hypot(p.x - v.x, p.y - v.y);
+          return { dist: d, inside: d <= r1 };
+        }
+        let t = ((p.x - v.x) * dx + (p.y - v.y) * dy) / l2;
+        t = Math.max(0, Math.min(1, t));
+        const projX = v.x + t * dx;
+        const projY = v.y + t * dy;
+        const dist = Math.hypot(p.x - projX, p.y - projY);
+        const curR = r1 + (r2 - r1) * t;
+        return { dist, inside: dist <= curR * 1.06 };
+      }
+
+      computeSkinnedPositions(currentJoints, viewport) {
+        const skinnedVerts = new Array(this.vertices.length);
+
+        for (let i = 0; i < this.vertices.length; i++) {
+          const skin = this.skinWeights[i];
+          let px = 0, py = 0;
+
+          if (skin.isHead) {
+            const headJ = currentJoints.head;
+            px = headJ.x + skin.headOffX;
+            py = headJ.y + skin.headOffY;
+          } else {
+            const bone = BONES[skin.boneIdx];
+            const j1 = currentJoints[JOINT_NAMES[bone.from]];
+            const j2 = currentJoints[JOINT_NAMES[bone.to]];
+
+            const dx = j2.x - j1.x;
+            const dy = j2.y - j1.y;
+            const len = Math.hypot(dx, dy) || 0.001;
+            const nx = -dy / len;
+            const ny = dx / len;
+
+            px = j1.x + dx * skin.u + nx * skin.v;
+            py = j1.y + dy * skin.u + ny * skin.v;
+          }
+
+          skinnedVerts[i] = {
+            x: viewport.offsetX + (px - viewport.cxNorm) * viewport.scale,
+            y: viewport.offsetY + (py - viewport.cyNorm) * viewport.scale
+          };
+        }
+
+        return skinnedVerts;
+      }
+    }
+
+    /* =========================================================================
+       7. PARTICLES, SHOCKWAVES & PROPS
+       ========================================================================= */
+    class PropsManager {
+      constructor() {
+        this.shockwaves = [];
+        this.particles = [];
+        this.ballTrails = [];
+        this.stars = [];
+        this.lightPulses = [];
+        this.crowdTaunts = [];
+      }
+
+      reset() {
+        this.shockwaves = [];
+        this.particles = [];
+        this.ballTrails = [];
+        this.stars = [];
+        this.lightPulses = [];
+        this.crowdTaunts = [];
+      }
+
+      spawnShockwave(x, y, color = '#ffd700', maxR = 380) {
+        this.shockwaves.push({
+          x, y, radius: 10, maxRadius: maxR,
+          alpha: 1.0, color: color, speed: CONFIG.shockwaveSpeed
+        });
+      }
+
+      spawnParticleBurst(x, y, count = 35, color = '#ffd700') {
+        for (let i = 0; i < count; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = 2 + Math.random() * 7;
+          this.particles.push({
+            x, y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            size: 2 + Math.random() * 4,
+            alpha: 1.0,
+            decay: 0.018 + Math.random() * 0.02,
+            color: color,
+            spin: (Math.random() - 0.5) * 0.2,
+            rotation: Math.random() * Math.PI
+          });
+        }
+      }
+
+      spawnBallTrail(startX, startY, targetX, targetY) {
+        this.ballTrails.push({
+          startX, startY, targetX, targetY,
+          progress: 0, speed: 0.035,
+          history: []
+        });
+      }
+
+      spawnStars(centerX, centerY, count = 5) {
+        this.stars = [];
+        const spacing = 45;
+        const startX = centerX - ((count - 1) * spacing) / 2;
+        for (let i = 0; i < count; i++) {
+          this.stars.push({
+            x: startX + i * spacing,
+            y: centerY,
+            size: 16,
+            alpha: 0,
+            delay: i * 350,
+            timer: 0
+          });
+        }
+      }
+
+      spawnCrowdTaunts(width, height) {
+        const tauntPhrases = [
+          "DONDE ESTA CR7?!", "PENALDO!", "HE'S FINISHED!",
+          "TOO OLD!", "NO CHANCE!", "THE WHISTLES"
+        ];
+        this.crowdTaunts = tauntPhrases.map((txt, i) => ({
+          text: txt,
+          x: width * 0.15 + Math.random() * width * 0.7,
+          y: height * 0.2 + (i * height * 0.1),
+          vx: (Math.random() - 0.5) * 1.5,
+          vy: 0.5 + Math.random() * 1.2,
+          alpha: 0.8,
+          size: 13 + Math.random() * 6
+        }));
+      }
+
+      update(dt) {
+        for (let i = this.shockwaves.length - 1; i >= 0; i--) {
+          const sw = this.shockwaves[i];
+          sw.radius += sw.speed;
+          sw.alpha = Math.max(0, 1 - sw.radius / sw.maxRadius);
+          if (sw.radius >= sw.maxRadius || sw.alpha <= 0.01) {
+            this.shockwaves.splice(i, 1);
+          }
+        }
+
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+          const p = this.particles[i];
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vy += 0.05;
+          p.rotation += p.spin;
+          p.alpha -= p.decay;
+          if (p.alpha <= 0) {
+            this.particles.splice(i, 1);
+          }
+        }
+
+        for (let i = this.ballTrails.length - 1; i >= 0; i--) {
+          const bt = this.ballTrails[i];
+          bt.progress += bt.speed;
+          const cx = bt.startX + (bt.targetX - bt.startX) * bt.progress;
+          const cy = bt.startY + (bt.targetY - bt.startY) * bt.progress - Math.sin(bt.progress * Math.PI) * 90;
+          bt.history.push({ x: cx, y: cy, alpha: 1.0 });
+          if (bt.history.length > 25) bt.history.shift();
+
+          if (bt.progress >= 1.0) {
+            this.ballTrails.splice(i, 1);
+          }
+        }
+
+        this.stars.forEach(s => {
+          s.timer += dt;
+          if (s.timer >= s.delay) {
+            s.alpha = Math.min(1.0, s.alpha + 0.04);
+          }
+        });
+
+        this.crowdTaunts.forEach(ct => {
+          ct.x += ct.vx;
+          ct.y += ct.vy;
+          ct.alpha -= 0.002;
+        });
+      }
+
+      draw(ctx, width, height, activeProps, chapter, viewport) {
+        if (activeProps.includes('net')) {
+          ctx.save();
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+          ctx.lineWidth = 1.0;
+          const step = 45;
+          ctx.beginPath();
+          for (let x = -height; x < width + height; x += step) {
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x + height, height);
+            ctx.moveTo(x + height, 0);
+            ctx.lineTo(x, height);
+          }
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        if (activeProps.includes('broom')) {
+          ctx.save();
+          const bx1 = viewport.offsetX - 40;
+          const by1 = viewport.offsetY - 20;
+          const bx2 = viewport.offsetX + 80;
+          const by2 = viewport.offsetY + 180;
+          const broomGrad = ctx.createLinearGradient(bx1, by1, bx2, by2);
+          broomGrad.addColorStop(0, '#5c4d3c');
+          broomGrad.addColorStop(1, '#8b7355');
+          ctx.strokeStyle = broomGrad;
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(bx1, by1);
+          ctx.lineTo(bx2, by2);
+          ctx.stroke();
+
+          ctx.fillStyle = '#6b583e';
+          ctx.beginPath();
+          ctx.moveTo(bx2 - 10, by2 - 15);
+          ctx.lineTo(bx2 + 25, by2 + 8);
+          ctx.lineTo(bx2 - 5, by2 + 18);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
+
+        if (activeProps.includes('boot')) {
+          ctx.save();
+          const bx = viewport.offsetX + 140;
+          const by = viewport.offsetY;
+          ctx.translate(bx, by);
+          ctx.fillStyle = 'rgba(246, 200, 95, 0.85)';
+          ctx.shadowColor = '#ffd700';
+          ctx.shadowBlur = 25;
+          ctx.beginPath();
+          ctx.moveTo(-25, 10);
+          ctx.lineTo(-20, -15);
+          ctx.lineTo(0, -8);
+          ctx.lineTo(25, 5);
+          ctx.lineTo(32, 14);
+          ctx.lineTo(-22, 14);
+          ctx.closePath();
+          ctx.fill();
+          ctx.strokeStyle = '#fff';
+          ctx.lineWidth = 1.2;
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        if (activeProps.includes('trophy')) {
+          ctx.save();
+          const tx = viewport.offsetX;
+          const ty = viewport.offsetY - (viewport.scale * 0.44);
+          ctx.translate(tx, ty);
+          const trophyGrad = ctx.createLinearGradient(0, -30, 0, 30);
+          trophyGrad.addColorStop(0, '#ffffff');
+          trophyGrad.addColorStop(0.5, '#ffd700');
+          trophyGrad.addColorStop(1, '#b3740e');
+
+          ctx.fillStyle = trophyGrad;
+          ctx.shadowColor = '#ffd700';
+          ctx.shadowBlur = 25;
+          ctx.beginPath();
+          ctx.moveTo(-22, -26);
+          ctx.lineTo(22, -26);
+          ctx.lineTo(14, 5);
+          ctx.lineTo(4, 18);
+          ctx.lineTo(12, 25);
+          ctx.lineTo(-12, 25);
+          ctx.lineTo(-4, 18);
+          ctx.lineTo(-14, 5);
+          ctx.closePath();
+          ctx.fill();
+
+          ctx.strokeStyle = '#ffd700';
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.arc(-22, -10, 10, Math.PI * 0.5, Math.PI * 1.5, false);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(22, -10, 10, Math.PI * 1.5, Math.PI * 0.5, false);
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        if (activeProps.includes('tunnel')) {
+          ctx.save();
+          const cx = width * 0.50;
+          const cy = viewport.offsetY - 20;
+          const tunnelGrad = ctx.createRadialGradient(cx, cy, 10, cx, cy, height * 0.55);
+          tunnelGrad.addColorStop(0, 'rgba(255, 255, 255, 0.45)');
+          tunnelGrad.addColorStop(0.3, 'rgba(246, 200, 95, 0.15)');
+          tunnelGrad.addColorStop(1, 'transparent');
+
+          ctx.fillStyle = tunnelGrad;
+          ctx.fillRect(0, 0, width, height);
+
+          ctx.strokeStyle = 'rgba(246, 200, 95, 0.12)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          for (let a = 0; a < Math.PI * 2; a += Math.PI / 6) {
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(cx + Math.cos(a) * width, cy + Math.sin(a) * height);
+          }
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        if (activeProps.includes('lightPulses')) {
+          ctx.save();
+          const t = Date.now() * 0.003;
+          const pulse = (Math.sin(t * 3) + 1) * 0.5;
+          const pulseGrad = ctx.createRadialGradient(viewport.offsetX, viewport.offsetY, 10, viewport.offsetX, viewport.offsetY, 300);
+          pulseGrad.addColorStop(0, `rgba(255, 255, 255, ${0.35 * pulse})`);
+          pulseGrad.addColorStop(0.5, `rgba(246, 200, 95, ${0.18 * pulse})`);
+          pulseGrad.addColorStop(1, 'transparent');
+          ctx.fillStyle = pulseGrad;
+          ctx.fillRect(0, 0, width, height);
+          ctx.restore();
+        }
+
+        if (this.crowdTaunts.length > 0) {
+          ctx.save();
+          ctx.font = 'bold 12px "JetBrains Mono", monospace';
+          ctx.textAlign = 'center';
+          this.crowdTaunts.forEach(ct => {
+            ctx.fillStyle = `rgba(230, 80, 80, ${ct.alpha})`;
+            ctx.shadowColor = '#ff2a2a';
+            ctx.shadowBlur = 10;
+            ctx.fillText(ct.text, ct.x, ct.y);
+          });
+          ctx.restore();
+        }
+
+        this.ballTrails.forEach(bt => {
+          if (bt.history.length > 1) {
+            ctx.save();
+            ctx.strokeStyle = '#ffd700';
+            ctx.shadowColor = '#fff';
+            ctx.shadowBlur = 20;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(bt.history[0].x, bt.history[0].y);
+            for (let i = 1; i < bt.history.length; i++) {
+              ctx.lineTo(bt.history[i].x, bt.history[i].y);
+            }
+            ctx.stroke();
+
+            const headPt = bt.history[bt.history.length - 1];
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(headPt.x, headPt.y, 7, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+          }
+        });
+
+        this.stars.forEach(s => {
+          if (s.alpha > 0) {
+            ctx.save();
+            ctx.translate(s.x, s.y);
+            ctx.fillStyle = `rgba(255, 215, 0, ${s.alpha})`;
+            ctx.shadowColor = '#ffd700';
+            ctx.shadowBlur = 25 * s.alpha;
+            this.drawStarPath(ctx, 0, 0, 5, s.size, s.size * 0.45);
+            ctx.fill();
+            ctx.restore();
+          }
+        });
+
+        this.shockwaves.forEach(sw => {
+          ctx.save();
+          ctx.strokeStyle = sw.color;
+          ctx.globalAlpha = sw.alpha;
+          ctx.shadowColor = sw.color;
+          ctx.shadowBlur = 20;
+          ctx.lineWidth = 4 * sw.alpha;
+          ctx.beginPath();
+          ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        });
+
+        this.particles.forEach(p => {
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate(p.rotation);
+          ctx.fillStyle = p.color;
+          ctx.globalAlpha = p.alpha;
+          ctx.shadowColor = p.color;
+          ctx.shadowBlur = 8;
+          ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+          ctx.restore();
+        });
+      }
+
+      drawStarPath(ctx, cx, cy, spikes, outerRadius, innerRadius) {
+        let rot = Math.PI / 2 * 3;
+        let step = Math.PI / spikes;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - outerRadius);
+        for (let i = 0; i < spikes; i++) {
+          let x = cx + Math.cos(rot) * outerRadius;
+          let y = cy + Math.sin(rot) * outerRadius;
+          ctx.lineTo(x, y);
+          rot += step;
+          x = cx + Math.cos(rot) * innerRadius;
+          y = cy + Math.sin(rot) * innerRadius;
+          ctx.lineTo(x, y);
+          rot += step;
+        }
+        ctx.lineTo(cx, cy - outerRadius);
+        ctx.closePath();
+      }
+    }
+
+    /* =========================================================================
+       8. MAIN APPLICATION CONTROLLER & RENDERER
+       ========================================================================= */
+    class KintsugiApp {
+      constructor() {
+        this.canvas = document.getElementById('art-canvas');
+        this.ctx = this.canvas.getContext('2d');
+        
+        this.width = window.innerWidth;
+        this.height = window.innerHeight;
+        
+        this.mesh = new KintsugiMesh();
+        this.props = new PropsManager();
+        
+        this.currentJoints = JSON.parse(JSON.stringify(POSES.standing));
+        this.startJoints = JSON.parse(JSON.stringify(POSES.standing));
+        this.targetJoints = JSON.parse(JSON.stringify(POSES.standing));
+        this.poseT = 1.0;
+        
+        this.trackTime = 0.0;
+        this.trackPlaying = true;
+        this.currentChapterIndex = 0;
+        this.chapterTime = 0;
+        this.isPlaying = false;
+        this.actCardOpen = false;
+        this.lastActSeen = -1;
+        
+        this.mouse = {
+          x: -9999, y: -9999, isDown: false, holdTime: 0, active: false
+        };
+        this.debugMode = false;
+        
+        this.currentGoldMeter = 0.0;
+        this.targetGoldMeter = 0.0;
+        
+        this.lastFrameTime = performance.now();
+        this.fpsCount = 60;
+        this.frameCount = 0;
+        this.fpsTimer = 0;
+
+        this.init();
+      }
+
+      init() {
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+        
+        this.mesh.generate();
+        document.getElementById('dbg-shards').innerText = this.mesh.shards.length;
+
+        this.setupInputListeners();
+        this.renderScrubberUI();
+        this.loadChapter(0, false);
+
+        requestAnimationFrame((t) => this.renderLoop(t));
+      }
+
+      resize() {
+        this.width = window.innerWidth;
+        this.height = window.innerHeight;
+        this.canvas.width = this.width * window.devicePixelRatio;
+        this.canvas.height = this.height * window.devicePixelRatio;
+        this.ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+      }
+
+      computeViewport() {
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        JOINT_NAMES.forEach(name => {
+          const j = this.currentJoints[name];
+          if (j) {
+            minX = Math.min(minX, j.x);
+            maxX = Math.max(maxX, j.x);
+            minY = Math.min(minY, j.y);
+            maxY = Math.max(maxY, j.y);
+          }
+        });
+
+        minX -= 0.07; maxX += 0.07;
+        minY -= (HEAD_RADIUS + 0.04); maxY += 0.05;
+
+        const bboxW = Math.max(0.2, maxX - minX);
+        const bboxH = Math.max(0.3, maxY - minY);
+        const cxNorm = (minX + maxX) / 2;
+        const cyNorm = (minY + maxY) / 2;
+
+        const topMargin = 72;
+        const bottomMargin = 210;
+        const availH = Math.max(220, this.height - topMargin - bottomMargin);
+        const availW = Math.max(260, this.width * 0.88);
+
+        const scale = Math.min(availW / bboxW, availH / bboxH);
+        const offsetX = this.width * 0.5;
+        const offsetY = topMargin + availH * 0.5;
+
+        return { scale, offsetX, offsetY, cxNorm, cyNorm, minX, maxX, minY, maxY, availH, topMargin };
+      }
+
+      setupInputListeners() {
+        const updatePointer = (clientX, clientY, isDown) => {
+          this.mouse.x = clientX;
+          this.mouse.y = clientY;
+          this.mouse.isDown = isDown;
+          this.mouse.active = true;
+        };
+
+        window.addEventListener('mousemove', (e) => updatePointer(e.clientX, e.clientY, this.mouse.isDown));
+        window.addEventListener('mousedown', (e) => {
+          if (e.target.closest('.hud-header') || e.target.closest('.hud-footer') || e.target.closest('.act-card-overlay') || e.target.closest('.milestone-panel')) return;
+          updatePointer(e.clientX, e.clientY, true);
+          audio.init();
+        });
+        window.addEventListener('mouseup', () => {
+          if (this.mouse.isDown && this.mouse.holdTime > 250) {
+            audio.playGoldResonance();
+            this.props.spawnShockwave(this.mouse.x, this.mouse.y, '#ffd700', 320);
+            this.props.spawnParticleBurst(this.mouse.x, this.mouse.y, 35, '#fff4b8');
+          }
+          this.mouse.isDown = false;
+          this.mouse.holdTime = 0;
+        });
+
+        window.addEventListener('touchstart', (e) => {
+          if (e.touches.length > 0) {
+            const t = e.touches[0];
+            if (e.target.closest('.hud-header') || e.target.closest('.hud-footer') || e.target.closest('.act-card-overlay') || e.target.closest('.milestone-panel')) return;
+            updatePointer(t.clientX, t.clientY, true);
+            audio.init();
+          }
+        }, { passive: true });
+
+        window.addEventListener('touchmove', (e) => {
+          if (e.touches.length > 0) {
+            const t = e.touches[0];
+            updatePointer(t.clientX, t.clientY, this.mouse.isDown);
+          }
+        }, { passive: true });
+
+        window.addEventListener('touchend', () => {
+          if (this.mouse.isDown && this.mouse.holdTime > 250) {
+            audio.playGoldResonance();
+            this.props.spawnShockwave(this.mouse.x, this.mouse.y, '#ffd700', 320);
+          }
+          this.mouse.isDown = false;
+          this.mouse.holdTime = 0;
+        });
+
+        window.addEventListener('keydown', (e) => {
+          if (e.key === 'ArrowRight' || e.key === 'PageDown') {
+            this.nextChapter();
+          } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+            this.prevChapter();
+          } else if (e.key === ' ') {
+            e.preventDefault();
+            this.togglePlay();
+          } else if (e.key === 'd' || e.key === 'D') {
+            this.debugMode = !this.debugMode;
+            document.getElementById('debug-overlay').classList.toggle('active', this.debugMode);
+            const scrubPanel = document.getElementById('debug-scrubber-panel');
+            if (scrubPanel) scrubPanel.classList.toggle('active', this.debugMode);
+          } else if (e.key === 'e' || e.key === 'E') {
+            this.exportCurrentPose();
+          } else if (e.key === 's' || e.key === 'S') {
+            this.triggerManualShatterRepair();
+          }
+        });
+
+        let touchStartX = 0;
+        window.addEventListener('touchstart', (e) => { touchStartX = e.changedTouches[0].screenX; }, { passive: true });
+        window.addEventListener('touchend', (e) => {
+          const diff = e.changedTouches[0].screenX - touchStartX;
+          if (Math.abs(diff) > 60) {
+            if (diff < 0) this.nextChapter();
+            else this.prevChapter();
+          }
+        }, { passive: true });
+
+        let wheelCooldown = 0;
+        window.addEventListener('wheel', (e) => {
+          if (Date.now() - wheelCooldown < 600) return;
+          if (Math.abs(e.deltaY) > 30) {
+            wheelCooldown = Date.now();
+            if (e.deltaY > 0) this.nextChapter();
+            else this.prevChapter();
+          }
+        }, { passive: true });
+
+        document.getElementById('btn-prev').addEventListener('click', () => this.prevChapter());
+        document.getElementById('btn-next').addEventListener('click', () => this.nextChapter());
+        document.getElementById('btn-play').addEventListener('click', () => this.togglePlay());
+        document.getElementById('btn-shatter').addEventListener('click', () => this.triggerManualShatterRepair());
+        const scrubBar = document.getElementById('debug-scrubber-bar');
+        if (scrubBar) {
+          scrubBar.addEventListener('click', (e) => {
+            const rect = scrubBar.getBoundingClientRect();
+            const clickT = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            const curChapter = CHAPTERS[this.currentChapterIndex];
+            if (curChapter.track && GENERATED_POSES && GENERATED_POSES[curChapter.track]) {
+              const dur = GENERATED_POSES[curChapter.track].duration || 4.0;
+              this.trackTime = clickT * dur;
+            } else {
+              this.poseT = clickT;
+            }
+          });
+        }
+
+        document.getElementById('btn-sound').addEventListener('click', () => {
+          const on = audio.toggle();
+          document.getElementById('btn-sound').classList.toggle('active', on);
+          document.getElementById('sound-icon').innerText = on ? '🔊' : '🔈';
+        });
+        document.getElementById('btn-debug').addEventListener('click', () => {
+          this.debugMode = !this.debugMode;
+          document.getElementById('debug-overlay').classList.toggle('active', this.debugMode);
+          document.getElementById('btn-debug').classList.toggle('active', this.debugMode);
+        });
+        document.getElementById('act-modal-btn').addEventListener('click', () => {
+          this.closeActModal();
+        });
+        document.getElementById('milestone-replay-btn').addEventListener('click', () => {
+          document.getElementById('milestone-panel').classList.remove('visible');
+          this.loadChapter(0, true);
+        });
+      }
+
+      renderScrubberUI() {
+        const container = document.getElementById('scrubber-container');
+        container.innerHTML = '';
+
+        const acts = [1, 2, 3, 4, 5, 6];
+        acts.forEach(actNum => {
+          const group = document.createElement('div');
+          group.className = 'act-group';
+
+          const actChapters = CHAPTERS.filter(c => c.act === actNum);
+          actChapters.forEach(ch => {
+            const dot = document.createElement('div');
+            dot.className = 'scrub-dot';
+            dot.id = `dot-ch-${ch.id}`;
+            dot.title = ch.title;
+
+            const tooltip = document.createElement('div');
+            tooltip.className = 'dot-tooltip';
+            tooltip.innerText = `${ch.id}. ${ch.title}`;
+            dot.appendChild(tooltip);
+
+            dot.addEventListener('click', () => {
+              this.loadChapter(ch.id - 1, true);
+            });
+
+            group.appendChild(dot);
+          });
+
+          container.appendChild(group);
+        });
+      }
+
+      loadChapter(index, forceActModal = true) {
+        if (index < 0 || index >= CHAPTERS.length) return;
+        this.currentChapterIndex = index;
+        this.chapterTime = 0;
+        const chapter = CHAPTERS[index];
+
+        document.querySelectorAll('.scrub-dot').forEach((d, i) => {
+          d.classList.toggle('active', i === index);
+          d.classList.toggle('visited', i < index);
+        });
+
+        document.getElementById('moment-act-tag').innerText = chapter.actName;
+        document.getElementById('moment-title').innerText = chapter.title;
+        document.getElementById('moment-subtitle').innerText = chapter.subtitle;
+        document.getElementById('moment-quote').innerText = chapter.quote || '[QUOTE: fill in]';
+
+        this.targetGoldMeter = chapter.gold;
+
+        if (chapter.act !== this.lastActSeen && forceActModal) {
+          this.showActModal(chapter);
+          this.lastActSeen = chapter.act;
+        }
+
+        const milestoneEl = document.getElementById('milestone-panel');
+        if (chapter.id === 28) {
+          milestoneEl.classList.add('visible');
+          this.animateMilestoneCounters();
+        } else {
+          milestoneEl.classList.remove('visible');
+        }
+
+        this.startJoints = JSON.parse(JSON.stringify(this.currentJoints));
+        const targetPoseData = POSES[chapter.pose] || POSES.standing;
+        this.targetJoints = JSON.parse(JSON.stringify(targetPoseData));
+        this.poseT = 0.0;
+
+        const viewport = this.computeViewport();
+        this.props.reset();
+        if (chapter.props.includes('stars')) {
+          this.props.spawnStars(viewport.offsetX, viewport.topMargin + 20, 5);
+        }
+        if (chapter.props.includes('crowdTaunts')) {
+          this.props.spawnCrowdTaunts(this.width, this.height);
+        }
+        if (chapter.props.includes('shockwave')) {
+          this.props.spawnShockwave(viewport.offsetX, viewport.offsetY, chapter.palette.stroke, 360);
+          audio.playImpact();
+        }
+        if (chapter.props.includes('ballTrail')) {
+          this.props.spawnBallTrail(this.width * 0.15, this.height * 0.65, this.width * 0.85, this.height * 0.22);
+        }
+
+        this.applyChapterStateToShards(chapter);
+
+        if (chapter.state === 'shattered') {
+          audio.playShatter(chapter.shatterStrength || 1.0);
+        } else if (chapter.state === 'golden') {
+          audio.playGoldResonance();
+        } else {
+          audio.playGlassClink(1.1);
+        }
+      }
+
+      applyChapterStateToShards(chapter) {
+        const missingCount = Math.floor(this.mesh.shards.length * (chapter.missingShards || 0));
+
+        this.mesh.shards.forEach((shard, idx) => {
+          shard.broken = (chapter.state === 'shattered') ? 1 : (chapter.state === 'cracked' ? 0.4 : 0);
+          shard.gold = chapter.gold;
+          shard.missing = (idx < missingCount);
+
+          if (chapter.state === 'shattered') {
+            const power = (chapter.shatterStrength || 0.8) * 16;
+            const angle = Math.random() * Math.PI * 2;
+            shard.vx = Math.cos(angle) * (2 + Math.random() * power);
+            shard.vy = Math.sin(angle) * (2 + Math.random() * power);
+            shard.vRot = (Math.random() - 0.5) * 0.15;
+          } else if (chapter.state === 'assembling') {
+            shard.currentPos.x = (Math.random() - 0.5) * 260;
+            shard.currentPos.y = (Math.random() - 0.5) * 260;
+            shard.vx = (Math.random() - 0.5) * 5;
+            shard.vy = (Math.random() - 0.5) * 5;
+          }
+        });
+      }
+
+
+      updateDebugScrubberUI(chapter) {
+        const panel = document.getElementById('debug-scrubber-panel');
+        if (!panel) return;
+        const trackName = chapter.track || (chapter.poseB ? `${chapter.pose} ➔ ${chapter.poseB}` : chapter.pose);
+        document.getElementById('dbg-track-name').innerText = `TRACK: ${trackName}`;
+        
+        const markersContainer = document.getElementById('debug-keyframe-markers-container');
+        markersContainer.innerHTML = '';
+
+        if (chapter.track && GENERATED_POSES && GENERATED_POSES[chapter.track]) {
+          const trackData = GENERATED_POSES[chapter.track];
+          trackData.keyframes.forEach(kf => {
+            const marker = document.createElement('div');
+            marker.className = 'debug-keyframe-marker';
+            marker.style.left = `${kf.t * 100}%`;
+            marker.title = `Keyframe at t=${kf.t.toFixed(2)}`;
+            markersContainer.appendChild(marker);
+          });
+        }
+      }
+
+      exportCurrentPose() {
+        const poseExport = {};
+        JOINT_NAMES.forEach(j => {
+          if (this.currentJoints[j]) {
+            poseExport[j] = {
+              x: Number(this.currentJoints[j].x.toFixed(4)),
+              y: Number(this.currentJoints[j].y.toFixed(4))
+            };
+          }
+        });
+        const jsonStr = JSON.stringify(poseExport, null, 2);
+        console.log("=== EXPORTED SKELETAL KEYFRAME POSE (CR7) ===");
+        console.log(jsonStr);
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(jsonStr).catch(() => {});
+        }
+
+        const toast = document.getElementById('export-toast');
+        if (toast) {
+          toast.classList.add('visible');
+          setTimeout(() => toast.classList.remove('visible'), 2400);
+        }
+      }
+
+      showActModal(chapter) {
+        const overlay = document.getElementById('act-card-overlay');
+        document.getElementById('act-modal-num').innerText = `ACT ${chapter.act}`;
+        document.getElementById('act-modal-title').innerText = chapter.actName.replace(/ACT\s[IVX]+:\s*/, '');
+        document.getElementById('act-modal-desc').innerText = chapter.actDesc || "A defining chapter in the kintsugi silhouette.";
+        overlay.classList.add('visible');
+        this.actCardOpen = true;
+      }
+
+      closeActModal() {
+        const overlay = document.getElementById('act-card-overlay');
+        overlay.classList.remove('visible');
+        this.actCardOpen = false;
+      }
+
+      nextChapter() {
+        let nextIdx = (this.currentChapterIndex + 1) % CHAPTERS.length;
+        this.loadChapter(nextIdx, true);
+      }
+
+      prevChapter() {
+        let prevIdx = (this.currentChapterIndex - 1 + CHAPTERS.length) % CHAPTERS.length;
+        this.loadChapter(prevIdx, true);
+      }
+
+      togglePlay() {
+        this.isPlaying = !this.isPlaying;
+        document.getElementById('btn-play').classList.toggle('active', this.isPlaying);
+        document.getElementById('play-icon').innerText = this.isPlaying ? '❚❚' : '▶';
+      }
+
+      triggerManualShatterRepair() {
+        const isShatteredNow = this.mesh.shards[0] && Math.abs(this.mesh.shards[0].vx) > 1.0;
+        
+        if (!isShatteredNow) {
+          audio.playShatter(1.0);
+          this.mesh.shards.forEach(s => {
+            const angle = Math.random() * Math.PI * 2;
+            const force = 10 + Math.random() * 22;
+            s.vx += Math.cos(angle) * force;
+            s.vy += Math.sin(angle) * force;
+            s.vRot += (Math.random() - 0.5) * 0.25;
+          });
+        } else {
+          audio.playGoldResonance();
+          this.targetGoldMeter = Math.min(1.0, this.targetGoldMeter + 0.15);
+          this.mesh.shards.forEach(s => {
+            s.vx *= 0.2;
+            s.vy *= 0.2;
+            s.gold = Math.min(1.0, s.gold + 0.25);
+          });
+          const vp = this.computeViewport();
+          this.props.spawnShockwave(vp.offsetX, vp.offsetY, '#ffd700', 420);
+        }
+      }
+
+      animateMilestoneCounters() {
+        const targets = { goals: 915, ucl: 5, bdr: 5, euro: 1, boot: 4, nations: 1 };
+        const durations = { goals: 2000, ucl: 1200, bdr: 1200, euro: 800, boot: 1000, nations: 800 };
+        const start = performance.now();
+
+        const update = () => {
+          const now = performance.now();
+          let allDone = true;
+          for (let key in targets) {
+            const elapsed = now - start;
+            const progress = Math.min(1.0, elapsed / durations[key]);
+            const val = Math.floor(targets[key] * progress);
+            const el = document.getElementById(`stat-${key}`);
+            if (el) el.innerText = key === 'goals' ? `${val}+` : val;
+            if (progress < 1.0) allDone = false;
+          }
+          if (!allDone) requestAnimationFrame(update);
+        };
+        requestAnimationFrame(update);
+      }
+
+      /* =======================================================================
+         9. MAIN RENDER & PHYSICS LOOP
+         ======================================================================= */
+      renderLoop(timestamp) {
+        const dt = Math.min(60, timestamp - this.lastFrameTime);
+        this.lastFrameTime = timestamp;
+
+        this.frameCount++;
+        this.fpsTimer += dt;
+        if (this.fpsTimer >= 500) {
+          this.fpsCount = Math.round((this.frameCount * 1000) / this.fpsTimer);
+          this.frameCount = 0;
+          this.fpsTimer = 0;
+          document.getElementById('dbg-fps').innerText = this.fpsCount;
+        }
+
+        if (this.isPlaying && !this.actCardOpen) {
+          this.chapterTime += dt;
+          const curCh = CHAPTERS[this.currentChapterIndex];
+          if (this.chapterTime >= (curCh.duration || CONFIG.defaultChapterDuration)) {
+            this.nextChapter();
+          }
+        }
+
+        if (this.mouse.isDown) {
+          this.mouse.holdTime += dt;
+          if (this.mouse.holdTime > 200) {
+            const holdForce = Math.min(CONFIG.holdShatterForce, 5 + this.mouse.holdTime * 0.04);
+            this.mesh.shards.forEach(s => {
+              const dx = (s.currentVertices[0].x + s.currentVertices[1].x + s.currentVertices[2].x) / 3 - this.mouse.x;
+              const dy = (s.currentVertices[0].y + s.currentVertices[1].y + s.currentVertices[2].y) / 3 - this.mouse.y;
+              const dist = Math.hypot(dx, dy) || 1;
+              if (dist < 300) {
+                const f = (1 - dist / 300) * holdForce;
+                s.vx += (dx / dist) * f * 0.3;
+                s.vy += (dy / dist) * f * 0.3;
+                s.vRot += (Math.random() - 0.5) * 0.05;
+              }
+            });
+          }
+        }
+
+        if (this.poseT < 1.0) {
+          this.poseT = Math.min(1.0, this.poseT + dt / (CONFIG.poseTransitionDuration * 1000));
+          const ease = this.poseT < 0.5 ? 4 * this.poseT * this.poseT * this.poseT : 1 - Math.pow(-2 * this.poseT + 2, 3) / 2;
+
+          JOINT_NAMES.forEach(j => {
+            const pStart = this.startJoints[j];
+            const pTarget = this.targetJoints[j];
+            if (pStart && pTarget) {
+              this.currentJoints[j] = {
+                x: pStart.x + (pTarget.x - pStart.x) * ease,
+                y: pStart.y + (pTarget.y - pStart.y) * ease
+              };
+            }
+          });
+        }
+
+        const curChapter = CHAPTERS[this.currentChapterIndex];
+        
+        // Track animation playback with Catmull-Rom spline interpolation & holdAtPeak
+        if (curChapter.track && GENERATED_POSES && GENERATED_POSES[curChapter.track]) {
+          const trackData = GENERATED_POSES[curChapter.track];
+          const dur = trackData.duration || 4.95;
+          const spd = curChapter.speed || 1.0;
+          this.trackTime += (dt / 1000) * spd;
+          
+          let normT = (this.trackTime / dur);
+          if (curChapter.loop !== false) {
+            normT = normT % 1.0;
+          } else {
+            normT = Math.min(1.0, normT);
+          }
+
+          const interpolated = interpolateTrackPose(trackData, normT, curChapter.holdAtPeak || 0.0);
+          if (interpolated && interpolated.joints) {
+            JOINT_NAMES.forEach(j => {
+              if (interpolated.joints[j]) {
+                this.currentJoints[j] = {
+                  x: interpolated.joints[j].x + (interpolated.root ? interpolated.root.x : 0),
+                  y: interpolated.joints[j].y + (interpolated.root ? interpolated.root.y : 0)
+                };
+              }
+            });
+            // Enforce constant bone lengths & anatomic angle clamping
+            enforceSkeletalConstraints(this.currentJoints);
+          }
+
+          // Update Debug Scrubber UI display
+          const fill = document.getElementById('debug-scrubber-fill');
+          if (fill) fill.style.width = `${normT * 100}%`;
+          const timeText = document.getElementById('dbg-track-time');
+          if (timeText) timeText.innerText = `${(normT * dur).toFixed(2)}s / ${dur.toFixed(2)}s (t: ${normT.toFixed(2)})`;
+        } else if (curChapter.poseB && this.poseT >= 1.0) {
+          const cycle = (Math.sin(Date.now() * 0.003) + 1) * 0.5;
+          const poseA = POSES[curChapter.pose] || POSES.standing;
+          const poseB = POSES[curChapter.poseB] || POSES.standing;
+          JOINT_NAMES.forEach(j => {
+            if (poseA[j] && poseB[j]) {
+              this.currentJoints[j] = {
+                x: poseA[j].x + (poseB[j].x - poseA[j].x) * cycle,
+                y: poseA[j].y + (poseB[j].y - poseA[j].y) * cycle
+              };
+            }
+          });
+          enforceSkeletalConstraints(this.currentJoints);
+        }
+
+        const viewport = this.computeViewport();
+        const skinnedVerts = this.mesh.computeSkinnedPositions(this.currentJoints, viewport);
+
+        this.currentGoldMeter += (this.targetGoldMeter - this.currentGoldMeter) * 0.08;
+        const goldPercent = Math.round(this.currentGoldMeter * 100);
+        document.getElementById('gold-meter-val').innerText = `${goldPercent}%`;
+        document.getElementById('gold-meter-fill').style.width = `${goldPercent}%`;
+        document.getElementById('dbg-gold').innerText = this.currentGoldMeter.toFixed(2);
+        document.getElementById('dbg-state').innerText = curChapter.state;
+        document.getElementById('dbg-pose').innerText = curChapter.pose;
+
+        this.updateShardsPhysics(skinnedVerts);
+        this.props.update(dt);
+        this.renderScene(skinnedVerts, curChapter, viewport);
+
+        requestAnimationFrame((t) => this.renderLoop(t));
+      }
+
+      updateShardsPhysics(skinnedVerts) {
+        const mouseR = CONFIG.mouseRadius;
+        const mouseForce = CONFIG.mouseRepulsionForce;
+
+        this.mesh.shards.forEach(shard => {
+          if (shard.missing) return;
+
+          const i0 = shard.indices[0];
+          const i1 = shard.indices[1];
+          const i2 = shard.indices[2];
+
+          const v0 = skinnedVerts[i0];
+          const v1 = skinnedVerts[i1];
+          const v2 = skinnedVerts[i2];
+          if (!v0 || !v1 || !v2) return;
+
+          const homeCx = (v0.x + v1.x + v2.x) / 3;
+          const homeCy = (v0.y + v1.y + v2.y) / 3;
+          shard.homeCentroid = { x: homeCx, y: homeCy };
+
+          const currentCx = homeCx + shard.currentPos.x;
+          const currentCy = homeCy + shard.currentPos.y;
+
+          if (this.mouse.active) {
+            const mdx = currentCx - this.mouse.x;
+            const mdy = currentCy - this.mouse.y;
+            const mDist = Math.hypot(mdx, mdy);
+            if (mDist < mouseR && mDist > 0) {
+              const repelFactor = (1 - mDist / mouseR) * mouseForce;
+              shard.vx += (mdx / mDist) * repelFactor;
+              shard.vy += (mdy / mDist) * repelFactor;
+              shard.vRot += (Math.random() - 0.5) * 0.04;
+            }
+          }
+
+          const fx = -CONFIG.springStiffness * shard.currentPos.x;
+          const fy = -CONFIG.springStiffness * shard.currentPos.y;
+          const fRot = -CONFIG.angularSpring * shard.rotation;
+
+          shard.vx = (shard.vx + fx) * CONFIG.damping;
+          shard.vy = (shard.vy + fy) * CONFIG.damping;
+          shard.vRot = (shard.vRot + fRot) * CONFIG.angularDamping;
+
+          shard.currentPos.x += shard.vx;
+          shard.currentPos.y += shard.vy;
+          shard.rotation += shard.vRot;
+
+          const cosR = Math.cos(shard.rotation);
+          const sinR = Math.sin(shard.rotation);
+
+          shard.currentVertices = [v0, v1, v2].map(v => {
+            const relX = v.x - homeCx;
+            const relY = v.y - homeCy;
+            return {
+              x: currentCx + (relX * cosR - relY * sinR),
+              y: currentCy + (relX * sinR + relY * cosR)
+            };
+          });
+        });
+      }
+
+      // Material Color Resolver per Shard based on Region & Current Kit
+      resolveShardColor(shard, kit) {
+        let baseHex = '#ffffff';
+        const norm = shard.restCentroidNorm;
+
+        switch (shard.region) {
+          case 'hair':
+            baseHex = kit.hairStyle === 'curly' ? MATERIALS.hairCurly.base : MATERIALS.hairQuiff.base;
+            break;
+          case 'face':
+          case 'neck':
+          case 'skin':
+            baseHex = MATERIALS.skin.base;
+            break;
+          case 'jerseyTorso':
+            if (kit.pattern === 'hoops') {
+              const stripe = Math.floor((norm.y - 0.20) * 35) % 2;
+              baseHex = stripe === 0 ? kit.jerseyBase : kit.jerseyAccent;
+            } else if (kit.pattern === 'stripes') {
+              const stripe = Math.floor((norm.x - 0.40) * 45) % 2;
+              baseHex = stripe === 0 ? kit.jerseyBase : kit.jerseyAccent;
+            } else {
+              baseHex = kit.jerseyBase;
+            }
+            break;
+          case 'jerseySleeve':
+            baseHex = kit.jerseyBase;
+            break;
+          case 'numberGlyph':
+            baseHex = kit.numberColor;
+            break;
+          case 'shorts':
+            baseHex = kit.shorts;
+            break;
+          case 'socks':
+            baseHex = (norm.y > 0.72 && norm.y < 0.75) ? kit.socksAccent : kit.socks;
+            break;
+          case 'boots':
+            baseHex = (norm.y > 0.90) ? kit.bootAccent : kit.bootBase;
+            break;
+          default:
+            baseHex = kit.jerseyBase;
+        }
+
+        // Apply Facet 3D Lighting & Lightness Jitter
+        return this.adjustColorBrightness(baseHex, shard.facetLight, shard.tintShift);
+      }
+
+      adjustColorBrightness(hexColor, factor, tintShift = 0) {
+        if (!hexColor || hexColor === 'transparent') return 'rgba(255,255,255,0.1)';
+        let hex = hexColor.replace('#', '');
+        if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+        let num = parseInt(hex, 16);
+        let r = (num >> 16) & 255;
+        let g = (num >> 8) & 255;
+        let b = num & 255;
+
+        r = Math.max(0, Math.min(255, Math.round((r + tintShift * 255) * factor)));
+        g = Math.max(0, Math.min(255, Math.round(g * factor)));
+        b = Math.max(0, Math.min(255, Math.round((b - tintShift * 128) * factor)));
+
+        return `rgb(${r},${g},${b})`;
+      }
+
+      renderScene(skinnedVerts, chapter, viewport) {
+        const ctx = this.ctx;
+        ctx.clearRect(0, 0, this.width, this.height);
+
+        const currentKit = KITS[chapter.kit] || KITS.madridHome;
+
+        // 1. Ambient Background
+        const bgGrad = ctx.createRadialGradient(
+          viewport.offsetX, viewport.offsetY, 40,
+          viewport.offsetX, viewport.offsetY, this.height * 0.75
+        );
+        bgGrad.addColorStop(0, chapter.palette.dark || '#0d131f');
+        bgGrad.addColorStop(0.65, '#05070c');
+        bgGrad.addColorStop(1, '#020305');
+        ctx.fillStyle = bgGrad;
+        ctx.fillRect(0, 0, this.width, this.height);
+
+        // 2. Props & Effects
+        this.props.draw(ctx, this.width, this.height, chapter.props, chapter, viewport);
+
+        // 3. Render Shards with Material Costumes & Dark Gaps
+        const shimmerT = Date.now() * CONFIG.specularShimmerSpeed;
+        const gapRatio = CONFIG.shardGapRatio;
+
+        this.mesh.shards.forEach(shard => {
+          if (shard.missing) return;
+
+          const pts = shard.currentVertices;
+          if (pts.length < 3) return;
+
+          // Dynamic Stretch / Sliver Rejection (> 1.8x rest edge length)
+          if (shard.restEdges) {
+            const curE0 = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y) / (viewport.scale || 1);
+            const curE1 = Math.hypot(pts[2].x - pts[1].x, pts[2].y - pts[1].y) / (viewport.scale || 1);
+            const curE2 = Math.hypot(pts[0].x - pts[2].x, pts[0].y - pts[2].y) / (viewport.scale || 1);
+            const r0 = curE0 / (shard.restEdges[0] || 0.001);
+            const r1 = curE1 / (shard.restEdges[1] || 0.001);
+            const r2 = curE2 / (shard.restEdges[2] || 0.001);
+            if (Math.max(r0, r1, r2) > 1.85) {
+              return; // Hide stretched sliver mesh triangle
+            }
+          }
+
+          const cx = (pts[0].x + pts[1].x + pts[2].x) / 3;
+          const cy = (pts[0].y + pts[1].y + pts[2].y) / 3;
+
+          const in0 = { x: cx + (pts[0].x - cx) * gapRatio, y: cy + (pts[0].y - cy) * gapRatio };
+          const in1 = { x: cx + (pts[1].x - cx) * gapRatio, y: cy + (pts[1].y - cy) * gapRatio };
+          const in2 = { x: cx + (pts[2].x - cx) * gapRatio, y: cy + (pts[2].y - cy) * gapRatio };
+
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(in0.x, in0.y);
+          ctx.lineTo(in1.x, in1.y);
+          ctx.lineTo(in2.x, in2.y);
+          ctx.closePath();
+
+          // Resolve distinct material / kit color for this facet
+          const facetFill = this.resolveShardColor(shard, currentKit);
+          ctx.fillStyle = facetFill;
+          ctx.fill();
+
+          // Subtle Specular Shimmer
+          const gleam = (Math.sin(shimmerT + shard.specularPhase) + 1) * 0.5;
+          if (gleam > 0.85) {
+            ctx.fillStyle = `rgba(255, 255, 255, ${(gleam - 0.85) * 0.35})`;
+            ctx.fill();
+          }
+
+          // Thin, low-opacity glass edge highlight
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.16)';
+          ctx.lineWidth = 0.7;
+          ctx.stroke();
+
+          ctx.restore();
+        });
+
+        // 4. Abstract Chest Emblem (Shield/Star outline on chest in kit accent color)
+        if (currentKit.name !== "Origins Street") {
+          const chestJ = this.currentJoints.chest;
+          if (chestJ) {
+            const emX = viewport.offsetX + (chestJ.x - 0.025 - viewport.cxNorm) * viewport.scale;
+            const emY = viewport.offsetY + (chestJ.y - 0.035 - viewport.cyNorm) * viewport.scale;
+            ctx.save();
+            ctx.strokeStyle = currentKit.jerseyAccent;
+            ctx.lineWidth = 1.4;
+            ctx.beginPath();
+            ctx.moveTo(emX - 5, emY - 6);
+            ctx.lineTo(emX + 5, emY - 6);
+            ctx.lineTo(emX + 4, emY + 2);
+            ctx.lineTo(emX, emY + 7);
+            ctx.lineTo(emX - 4, emY + 2);
+            ctx.closePath();
+            ctx.stroke();
+            ctx.restore();
+          }
+        }
+
+        // 5. Kintsugi Gold Seams: ONLY on 18-22% candidate edges + repaired borders, scaled by chapter gold
+        if (this.currentGoldMeter > 0.01) {
+          ctx.save();
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.shadowColor = '#ffd700';
+          ctx.shadowBlur = CONFIG.goldGlowBlur * this.currentGoldMeter;
+          ctx.strokeStyle = `rgba(246, 200, 95, ${Math.min(1.0, this.currentGoldMeter * 1.15)})`;
+          ctx.lineWidth = CONFIG.goldSeamWidth * Math.max(0.6, this.currentGoldMeter);
+
+          this.mesh.edges.forEach(edge => {
+            if (!edge.isGoldCandidate && this.currentGoldMeter < 0.90) return;
+
+            const s0 = this.mesh.shards[edge.triangles[0]];
+            const s1 = edge.triangles[1] !== undefined ? this.mesh.shards[edge.triangles[1]] : null;
+            if (s0 && s0.missing) return;
+            if (s1 && s1.missing) return;
+
+            const p0 = skinnedVerts[edge.v0];
+            const p1 = skinnedVerts[edge.v1];
+            if (p0 && p1) {
+              ctx.beginPath();
+              ctx.moveTo(p0.x, p0.y);
+              ctx.lineTo(p1.x, p1.y);
+              ctx.stroke();
+            }
+          });
+          ctx.restore();
+        }
+
+        // 6. Glowing Gold Eye Beacon (Single gold point)
+        if (chapter.id === 1 || chapter.id === 28 || chapter.gold > 0.7) {
+          const eyeJoint = this.currentJoints.eye;
+          if (eyeJoint) {
+            const ex = viewport.offsetX + (eyeJoint.x - viewport.cxNorm) * viewport.scale;
+            const ey = viewport.offsetY + (eyeJoint.y - viewport.cyNorm) * viewport.scale;
+            ctx.save();
+            ctx.shadowColor = '#fff3c4';
+            ctx.shadowBlur = 18;
+            ctx.fillStyle = '#ffd700';
+            ctx.beginPath();
+            ctx.arc(ex, ey, 3.2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(ex, ey, 1.6, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+          }
+        }
+
+        // 7. Debug Skeleton Overlay (D) with Joint Names
+        if (this.debugMode) {
+          this.renderDebugSkeleton(ctx, viewport);
+        }
+      }
+
+      renderDebugSkeleton(ctx, viewport) {
+        ctx.save();
+        ctx.strokeStyle = '#00ff88';
+        ctx.fillStyle = '#00ff88';
+        ctx.lineWidth = 2;
+
+        BONES.forEach(b => {
+          const j1 = this.currentJoints[JOINT_NAMES[b.from]];
+          const j2 = this.currentJoints[JOINT_NAMES[b.to]];
+          if (j1 && j2) {
+            const sx1 = viewport.offsetX + (j1.x - viewport.cxNorm) * viewport.scale;
+            const sy1 = viewport.offsetY + (j1.y - viewport.cyNorm) * viewport.scale;
+            const sx2 = viewport.offsetX + (j2.x - viewport.cxNorm) * viewport.scale;
+            const sy2 = viewport.offsetY + (j2.y - viewport.cyNorm) * viewport.scale;
+            ctx.beginPath();
+            ctx.moveTo(sx1, sy1);
+            ctx.lineTo(sx2, sy2);
+            ctx.stroke();
+          }
+        });
+
+        const headJ = this.currentJoints.head;
+        if (headJ) {
+          const hx = viewport.offsetX + (headJ.x - viewport.cxNorm) * viewport.scale;
+          const hy = viewport.offsetY + (headJ.y - viewport.cyNorm) * viewport.scale;
+          ctx.strokeStyle = 'rgba(0, 255, 136, 0.4)';
+          ctx.beginPath();
+          ctx.arc(hx, hy, HEAD_RADIUS * viewport.scale, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        JOINT_NAMES.forEach((name) => {
+          const j = this.currentJoints[name];
+          if (j) {
+            const jx = viewport.offsetX + (j.x - viewport.cxNorm) * viewport.scale;
+            const jy = viewport.offsetY + (j.y - viewport.cyNorm) * viewport.scale;
+            ctx.fillStyle = '#00ff88';
+            ctx.beginPath();
+            ctx.arc(jx, jy, 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.font = '10px "JetBrains Mono", monospace';
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(`${name}`, jx + 6, jy - 3);
+          }
+        });
+        ctx.restore();
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      window.app = new KintsugiApp();
+    });
+
+  })();
+  </script>
+</body>
+</html>
