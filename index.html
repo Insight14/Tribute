@@ -889,16 +889,29 @@
       },
       madridHome: {
         name: "Real Madrid (Home)",
-        jerseyBase: "#f6f8fb",
-        jerseyAccent: "#d4af37",
+        jerseyBase: "#f8f9fa",
+        jerseyAccent: "#1a2a44",
         pattern: "solid",
-        shorts: "#f6f8fb",
-        socks: "#f6f8fb",
-        socksAccent: "#d4af37",
+        shorts: "#f8f9fa",
+        socks: "#f8f9fa",
+        socksAccent: "#1a2a44",
         bootBase: "#181818",
-        bootAccent: "#e5c158",
-        numberColor: "#d4af37",
-        hairStyle: "quiff"
+        bootAccent: "#00d2be",
+        numberColor: "#1a2a44",
+        hairStyle: "noodleHighlights"
+      },
+      madridTeal: {
+        name: "Real Madrid (Turin Teal 2018)",
+        jerseyBase: "#0c7489",
+        jerseyAccent: "#053d48",
+        pattern: "solid",
+        shorts: "#0c7489",
+        socks: "#0c7489",
+        socksAccent: "#053d48",
+        bootBase: "#121212",
+        bootAccent: "#14b8a6",
+        numberColor: "#ffffff",
+        hairStyle: "noodleHighlights"
       },
       madridAway: {
         name: "Real Madrid (Away)",
@@ -911,19 +924,19 @@
         bootBase: "#0d1b2a",
         bootAccent: "#ffd700",
         numberColor: "#ffffff",
-        hairStyle: "quiff"
+        hairStyle: "noodleHighlights"
       },
       portugal: {
         name: "Portugal",
-        jerseyBase: "#a6192e",
-        jerseyAccent: "#006643",
+        jerseyBase: "#b91c1c",
+        jerseyAccent: "#047857",
         pattern: "solid",
-        shorts: "#006643",
-        socks: "#a6192e",
+        shorts: "#047857",
+        socks: "#b91c1c",
         socksAccent: "#ffd700",
         bootBase: "#141414",
         bootAccent: "#ffd700",
-        numberColor: "#ffd700",
+        numberColor: "#ffffff",
         hairStyle: "quiff"
       },
       juve: {
@@ -971,7 +984,8 @@
     const MATERIALS = {
       skin: { base: "#d89e74", shadow: "#a86b45", highlight: "#f3c29e" },
       hairCurly: { base: "#1e1713", shadow: "#100c0a", highlight: "#3d3027" },
-      hairQuiff: { base: "#181412", shadow: "#0d0a09", highlight: "#342921" }
+      hairQuiff: { base: "#181412", shadow: "#0d0a09", highlight: "#342921" },
+      hairNoodleHighlight: { base: "#1a1410", topHighlight: "#d4a74a", frostTip: "#edd087" }
     };
 
     /* =========================================================================
@@ -2069,6 +2083,14 @@
     }
 
     const POSES = {
+      finalRoarFistPump: {
+        head: { x: 0.50, y: 0.11 }, neck: { x: 0.50, y: 0.19 }, chest: { x: 0.50, y: 0.31 }, pelvis: { x: 0.50, y: 0.49 },
+        l_shoulder: { x: 0.38, y: 0.24 }, l_elbow: { x: 0.34, y: 0.36 }, l_wrist: { x: 0.33, y: 0.23 },
+        r_shoulder: { x: 0.62, y: 0.24 }, r_elbow: { x: 0.66, y: 0.36 }, r_wrist: { x: 0.67, y: 0.23 },
+        l_hip: { x: 0.44, y: 0.51 }, l_knee: { x: 0.40, y: 0.68 }, l_ankle: { x: 0.37, y: 0.88 },
+        r_hip: { x: 0.56, y: 0.51 }, r_knee: { x: 0.60, y: 0.68 }, r_ankle: { x: 0.63, y: 0.88 },
+        eye: { x: 0.50, y: 0.10 }
+      },
       standing: {
         head: { x: 0.50, y: 0.13 }, neck: { x: 0.50, y: 0.20 }, chest: { x: 0.50, y: 0.32 }, pelvis: { x: 0.50, y: 0.50 },
         l_shoulder: { x: 0.40, y: 0.23 }, l_elbow: { x: 0.35, y: 0.36 }, l_wrist: { x: 0.33, y: 0.50 },
@@ -2303,13 +2325,13 @@
         title: "Euro 2016 Glory (Portugal)", subtitle: "Red & green national palette; injured warrior guides from touchline to lift Portugal's first trophy.",
         quote: "[QUOTE: fill in]",
         kit: "portugal", pose: 'trophyLift', palette: { dark: '#1f0d12', mid: '#9b111e', light: '#008751', stroke: '#ffdf00' },
-        state: 'golden', gold: 0.74, props: ['trophy', 'shockwave', 'stars'], duration: 8500
+        state: 'golden', gold: 0.74, props: ['eurosTrophy', 'shockwave', 'stars'], duration: 8500
       },
       {
         id: 16, act: 3, actName: "ACT III: REAL MADRID",
         title: "Bicycle Kick in Turin (April 2018)", subtitle: "Shards fly up into horizontal mid-air scissor-kick 2.38m high; the Juventus stadium stands to applaud.",
         quote: "[COMMENTARY: fill in]",
-        kit: "madridHome", pose: 'bicycleKick', track: 'bicycleKick', speed: 1.0, loop: true, holdAtPeak: 0.45, palette: { dark: '#10141e', mid: '#2c3e50', light: '#ecf0f1', stroke: '#e8a724' },
+        kit: "madridTeal", pose: 'bicycleKick', track: 'bicycleKick', speed: 1.0, loop: true, holdAtPeak: 0.45, palette: { dark: '#041820', mid: '#0a4d5c', light: '#14b8a6', stroke: '#2dd4bf' },
         state: 'golden', gold: 0.82, props: ['shockwave', 'ballTrail'], duration: 8500
       },
       {
@@ -2317,7 +2339,7 @@
         title: "Champions League 3-Peat (5th UCL)", subtitle: "Celebration pose; five gold stars ignite sequentially with three pulses for the historic 3-peat.",
         quote: "[QUOTE: fill in]",
         kit: "madridHome", pose: 'celebrationArmsUp', palette: { dark: '#1a1f2c', mid: '#2e3d59', light: '#ffffff', stroke: '#ffd700' },
-        state: 'golden', gold: 0.88, props: ['stars', 'lightPulses', 'trophy'], duration: 8500
+        state: 'golden', gold: 0.88, props: ['stars', 'lightPulses', 'uclTrophy'], duration: 8500
       },
       {
         id: 18, act: 3, actName: "ACT III: REAL MADRID",
@@ -2397,9 +2419,9 @@
       },
       {
         id: 28, act: 6, actName: "ACT VI: RESILIENCE",
-        title: "The Immortal Kintsugi Siu (Al-Nassr & Beyond)", subtitle: "Radiant golden figure performing the iconic SIU; career milestones ticking into eternity.",
+        title: "The Eternal Standard (Portugal & Beyond)", subtitle: "Both fists clenched in triumphant roar; radiant gold seams burning eternal with career milestones.",
         quote: "[QUOTE: fill in]",
-        kit: "alNassr", pose: 'siu', palette: { dark: '#241a04', mid: '#8a6508', light: '#fff176', stroke: '#ffd700' },
+        kit: "portugal", pose: 'finalRoarFistPump', palette: { dark: '#1f0709', mid: '#8a111b', light: '#ffd700', stroke: '#ffd700' },
         state: 'golden', gold: 1.0, props: ['shockwave', 'stars', 'milestones'], duration: 10000
       }
     ];
@@ -2967,62 +2989,179 @@
           ctx.restore();
         }
 
+        // Golden Boot Award (Sculpted Golden Football Shoe on Plinth)
         if (activeProps.includes('boot')) {
           ctx.save();
-          const bx = viewport.offsetX + 140;
+          const bx = viewport.offsetX + (viewport.scale * 0.28);
           const by = viewport.offsetY;
           ctx.translate(bx, by);
-          ctx.fillStyle = 'rgba(246, 200, 95, 0.85)';
+
+          // Plinth base
+          ctx.fillStyle = '#0f131a';
+          ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+          ctx.lineWidth = 1;
+          ctx.fillRect(-38, 22, 76, 12);
+          ctx.strokeRect(-38, 22, 76, 12);
+
+          // Boot support stem
+          ctx.fillStyle = '#d4af37';
+          ctx.fillRect(-6, 14, 12, 8);
+
+          // Golden Boot Body
+          const bootGrad = ctx.createLinearGradient(-30, -20, 35, 20);
+          bootGrad.addColorStop(0, '#fff3a8');
+          bootGrad.addColorStop(0.35, '#ffd700');
+          bootGrad.addColorStop(0.7, '#d49b14');
+          bootGrad.addColorStop(1, '#7a4d04');
+          ctx.fillStyle = bootGrad;
           ctx.shadowColor = '#ffd700';
-          ctx.shadowBlur = 25;
+          ctx.shadowBlur = 24;
+
           ctx.beginPath();
-          ctx.moveTo(-25, 10);
-          ctx.lineTo(-20, -15);
-          ctx.lineTo(0, -8);
-          ctx.lineTo(25, 5);
-          ctx.lineTo(32, 14);
-          ctx.lineTo(-22, 14);
+          ctx.moveTo(-32, 14); // Heel
+          ctx.lineTo(-32, -6); // Heel counter
+          ctx.lineTo(-20, -18); // Ankle collar
+          ctx.lineTo(-6, -10); // Tongue / instep
+          ctx.lineTo(24, 6);  // Toe upper
+          ctx.lineTo(36, 12); // Toe tip
+          ctx.lineTo(30, 16); // Toe sole
+          ctx.lineTo(-30, 16); // Sole plate
           ctx.closePath();
           ctx.fill();
-          ctx.strokeStyle = '#fff';
+
+          // Cleats / Studs
+          ctx.fillStyle = '#fff4a0';
+          ctx.fillRect(-26, 16, 4, 5);
+          ctx.fillRect(-14, 16, 4, 5);
+          ctx.fillRect(8, 16, 4, 5);
+          ctx.fillRect(22, 16, 4, 5);
+
+          // Laces detail
+          ctx.strokeStyle = '#fff8cc';
           ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(-16, -12); ctx.lineTo(-12, -8);
+          ctx.moveTo(-10, -8);  ctx.lineTo(-6, -4);
+          ctx.moveTo(-4, -4);   ctx.lineTo(0, 0);
           ctx.stroke();
+
           ctx.restore();
         }
 
-        if (activeProps.includes('trophy')) {
+        // UEFA Champions League Trophy ("Big Ears" - Silver Amphora with huge curved ear handles)
+        if (activeProps.includes('uclTrophy') || activeProps.includes('trophy')) {
           ctx.save();
           const tx = viewport.offsetX;
           const ty = viewport.offsetY - (viewport.scale * 0.44);
           ctx.translate(tx, ty);
-          const trophyGrad = ctx.createLinearGradient(0, -30, 0, 30);
-          trophyGrad.addColorStop(0, '#ffffff');
-          trophyGrad.addColorStop(0.5, '#ffd700');
-          trophyGrad.addColorStop(1, '#b3740e');
 
-          ctx.fillStyle = trophyGrad;
-          ctx.shadowColor = '#ffd700';
+          // Silver Metallic Gradient
+          const uclGrad = ctx.createLinearGradient(-30, -35, 30, 35);
+          uclGrad.addColorStop(0, '#ffffff');
+          uclGrad.addColorStop(0.25, '#e2e8f0');
+          uclGrad.addColorStop(0.65, '#94a3b8');
+          uclGrad.addColorStop(0.9, '#475569');
+          uclGrad.addColorStop(1, '#1e293b');
+
+          ctx.fillStyle = uclGrad;
+          ctx.shadowColor = '#e2e8f0';
           ctx.shadowBlur = 25;
+
+          // Pedestal Base
           ctx.beginPath();
-          ctx.moveTo(-22, -26);
-          ctx.lineTo(22, -26);
-          ctx.lineTo(14, 5);
-          ctx.lineTo(4, 18);
-          ctx.lineTo(12, 25);
-          ctx.lineTo(-12, 25);
-          ctx.lineTo(-4, 18);
-          ctx.lineTo(-14, 5);
+          ctx.ellipse(0, 32, 18, 5, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillRect(-14, 25, 28, 7);
+
+          // Stem
+          ctx.fillRect(-6, 18, 12, 8);
+
+          // Main Body Cup (Flared & Elegantly Sculpted)
+          ctx.beginPath();
+          ctx.moveTo(-22, -28); // Top left rim
+          ctx.lineTo(22, -28);  // Top right rim
+          ctx.bezierCurveTo(24, -10, 22, 10, 10, 20); // Right flank
+          ctx.lineTo(-10, 20);  // Bottom cup
+          ctx.bezierCurveTo(-22, 10, -24, -10, -22, -28); // Left flank
           ctx.closePath();
           ctx.fill();
 
-          ctx.strokeStyle = '#ffd700';
-          ctx.lineWidth = 2.5;
+          // Tiered Rim / Lid
+          ctx.fillRect(-24, -32, 48, 5);
           ctx.beginPath();
-          ctx.arc(-22, -10, 10, Math.PI * 0.5, Math.PI * 1.5, false);
-          ctx.stroke();
+          ctx.ellipse(0, -32, 24, 4, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Iconic "BIG EARS" Large Looping Handles
+          ctx.strokeStyle = '#f8fafc';
+          ctx.lineWidth = 3.5;
           ctx.beginPath();
-          ctx.arc(22, -10, 10, Math.PI * 1.5, Math.PI * 0.5, false);
+          // Left Handle: starts near rim, loops high above rim and sweeps down wide
+          ctx.moveTo(-18, -26);
+          ctx.bezierCurveTo(-42, -38, -45, -5, -34, 10);
+          ctx.bezierCurveTo(-26, 20, -16, 18, -10, 16);
           ctx.stroke();
+
+          // Right Handle
+          ctx.beginPath();
+          ctx.moveTo(18, -26);
+          ctx.bezierCurveTo(42, -38, 45, -5, 34, 10);
+          ctx.bezierCurveTo(26, 20, 16, 18, 10, 16);
+          ctx.stroke();
+
+          // Highlights on rim and handles
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+          ctx.lineWidth = 1.2;
+          ctx.stroke();
+
+          ctx.restore();
+        }
+
+        // Euro 2016 Trophy (Henri Delaunay Cup - Tall Classic Silver Urn)
+        if (activeProps.includes('eurosTrophy')) {
+          ctx.save();
+          const tx = viewport.offsetX;
+          const ty = viewport.offsetY - (viewport.scale * 0.44);
+          ctx.translate(tx, ty);
+
+          const euroGrad = ctx.createLinearGradient(-20, -35, 20, 35);
+          euroGrad.addColorStop(0, '#ffffff');
+          euroGrad.addColorStop(0.3, '#cbd5e1');
+          euroGrad.addColorStop(0.7, '#64748b');
+          euroGrad.addColorStop(1, '#334155');
+
+          ctx.fillStyle = euroGrad;
+          ctx.shadowColor = '#cbd5e1';
+          ctx.shadowBlur = 22;
+
+          // Pedestal Base (Stepped circular plinth)
+          ctx.beginPath();
+          ctx.ellipse(0, 34, 16, 5, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillRect(-12, 26, 24, 8);
+
+          // Slender Amphora Body
+          ctx.beginPath();
+          ctx.moveTo(-14, -22); // Neck top
+          ctx.lineTo(14, -22);
+          ctx.bezierCurveTo(18, -8, 16, 14, 8, 26);
+          ctx.lineTo(-8, 26);
+          ctx.bezierCurveTo(-16, 14, -18, -8, -14, -22);
+          ctx.closePath();
+          ctx.fill();
+
+          // Flared Decorative Neck Collar
+          ctx.fillRect(-16, -30, 32, 8);
+          ctx.fillRect(-18, -34, 36, 4);
+
+          // Subtle decorative bands on body
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(-13, -12); ctx.lineTo(13, -12);
+          ctx.moveTo(-14, 2);   ctx.lineTo(14, 2);
+          ctx.stroke();
+
           ctx.restore();
         }
 
@@ -3817,7 +3956,14 @@
 
         switch (shard.region) {
           case 'hair':
-            baseHex = kit.hairStyle === 'curly' ? MATERIALS.hairCurly.base : MATERIALS.hairQuiff.base;
+            if (kit.hairStyle === 'curly') {
+              baseHex = MATERIALS.hairCurly.base;
+            } else if (kit.hairStyle === 'noodleHighlights') {
+              // Frosted noodle golden highlights on upper strands, dark undercut base
+              baseHex = (norm.y < 0.135 && Math.abs(norm.x - 0.50) < 0.035) ? MATERIALS.hairNoodleHighlight.topHighlight : MATERIALS.hairNoodleHighlight.base;
+            } else {
+              baseHex = MATERIALS.hairQuiff.base;
+            }
             break;
           case 'face':
           case 'neck':
